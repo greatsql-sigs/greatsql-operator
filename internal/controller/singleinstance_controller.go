@@ -70,23 +70,22 @@ var (
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	r.Log = logger.WithValues("Request.Service.Namespace", req.Namespace, "Request.Service.Name", req.Name)
 	r.Log.Info("Reconciling SingleInstance GreatSql...")
 
 	SingleInstance := &greatsqlv1.SingleInstance{}
-	if err := r.getSingleInstance(ctx, req, SingleInstance, r.Log); err != nil {
+	if err := r.getSingleInstance(ctx, req, SingleInstance); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.handleFinalizer(ctx, SingleInstance, r.Log); err != nil {
+	if err := r.handleFinalizer(ctx, SingleInstance); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.validateAndAddFinalizer(SingleInstance, req, r.Log); err != nil {
+	if err := r.validateAndAddFinalizer(SingleInstance, req); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.createResources(ctx, req, SingleInstance, r.Log); err != nil {
+	if err := r.createResources(ctx, req, SingleInstance); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -94,7 +93,7 @@ func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 // getSingleInstance gets the SingleInstance
-func (r *SingleInstanceReconciler) getSingleInstance(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) getSingleInstance(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	err := r.Client.Get(ctx, req.NamespacedName, SingleInstance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -108,7 +107,7 @@ func (r *SingleInstanceReconciler) getSingleInstance(ctx context.Context, req ct
 }
 
 // handleFinalizer handles the finalizer of the SingleInstance
-func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleInstance *greatsqlv1.SingleInstance) error {
 	finalizer := &utils.GreatSqlFinalizer{
 		Cli:      r.Client,
 		GreatSql: SingleInstance,
@@ -132,7 +131,7 @@ func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleIn
 }
 
 // validateAndAddFinalizer validates the spec of the SingleInstance and adds the finalizer
-func (r *SingleInstanceReconciler) validateAndAddFinalizer(SingleInstance *greatsqlv1.SingleInstance, req ctrl.Request, log logr.Logger) error {
+func (r *SingleInstanceReconciler) validateAndAddFinalizer(SingleInstance *greatsqlv1.SingleInstance, req ctrl.Request) error {
 	if err := r.validateSpec(SingleInstance.Spec, req); err != nil {
 		r.Log.Error(err, "invalid spec, please check")
 		return err
@@ -149,19 +148,19 @@ func (r *SingleInstanceReconciler) validateAndAddFinalizer(SingleInstance *great
 }
 
 // createResources creates the resources
-func (r *SingleInstanceReconciler) createResources(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) createResources(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	deployGreatsql := &appsv1.Deployment{}
 	if err := r.Client.Get(ctx, req.NamespacedName, deployGreatsql); err != nil {
-		if err := r.createConfigMap(ctx, req, log); err != nil {
+		if err := r.createConfigMap(ctx, req); err != nil {
 			return err
 		}
-		if err := r.createPersistentVolumeClaim(ctx, req, SingleInstance, log); err != nil {
+		if err := r.createPersistentVolumeClaim(ctx, req, SingleInstance); err != nil {
 			return err
 		}
-		if err := r.createDeployment(ctx, req, SingleInstance, log); err != nil {
+		if err := r.createDeployment(ctx, req, SingleInstance); err != nil {
 			return err
 		}
-		if err := r.createService(ctx, req, SingleInstance, log); err != nil {
+		if err := r.createService(ctx, req, SingleInstance); err != nil {
 			return err
 		}
 	}
@@ -169,7 +168,7 @@ func (r *SingleInstanceReconciler) createResources(ctx context.Context, req ctrl
 }
 
 // createConfigMap creates a ConfigMap for the SingleInstance
-func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl.Request, log logr.Logger) error {
+func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl.Request) error {
 	cnf := &mysql.MySQLConfig{
 		ServerID:                   "0",
 		EnableCluster:              false,
@@ -194,7 +193,7 @@ func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl
 }
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for the SingleInstance
-func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, &SingleInstance.Spec.PodSpec)
 	if err := r.Client.Create(ctx, pvc); err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaim")
@@ -205,7 +204,7 @@ func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Conte
 }
 
 // createDeployment creates a Deployment for the SingleInstance
-func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	deploy := kube.NewDeployment(req.Name+consts.Config, SingleInstance, int(*SingleInstance.Spec.Size))
 	if err := r.Client.Create(ctx, deploy); err != nil {
 		r.Log.Error(err, "Could not create deployment")
@@ -216,13 +215,13 @@ func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctr
 }
 
 // createService creates a Service for the SingleInstance
-func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	service := kube.NewService(req.Name, req.Namespace, consts.SingleInstance, &SingleInstance.ObjectMeta, SingleInstance.Spec.Ports, SingleInstance.Spec.Type)
 	if err := r.Client.Create(ctx, service); err != nil {
 		r.Log.Error(err, "Could not create service")
 		return err
 	}
-	log.Info("Create service is successful", "Name", service.Name, "Namespace", service.Namespace)
+	r.Log.Info("Create service is successful", "Name", service.Name, "Namespace", service.Namespace)
 	if err := r.updateStatus(ctx, SingleInstance, *service); err != nil {
 		r.Log.Error(err, "Could not update status")
 		return err
@@ -255,25 +254,24 @@ func (r *SingleInstanceReconciler) validateSpec(spec greatsqlv1.SingleInstanceSp
 
 // watchResource watches the resource
 func (r *SingleInstanceReconciler) watchResource(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) (ctrl.Result, error) {
-	log := logger.WithValues("Request.Service.Namespace", req.Namespace, "Request.Service.Name", req.Name)
-
+	
 	// Update spec annotation
-	if err := r.updateSpecAnnotation(ctx, SingleInstance, log); err != nil {
+	if err := r.updateSpecAnnotation(ctx, SingleInstance); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Update Deployment
-	if err := r.updateDeployment(ctx, req, SingleInstance, log); err != nil {
+	if err := r.updateDeployment(ctx, req, SingleInstance); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Update Service
-	if err := r.updateService(ctx, req, SingleInstance, log); err != nil {
+	if err := r.updateService(ctx, req, SingleInstance); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Update ConfigMap
-	if err := r.updateConfigMap(ctx, req, log); err != nil {
+	if err := r.updateConfigMap(ctx, req); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -281,7 +279,7 @@ func (r *SingleInstanceReconciler) watchResource(ctx context.Context, req ctrl.R
 }
 
 // updateSpecAnnotation updates the spec annotation
-func (r *SingleInstanceReconciler) updateSpecAnnotation(ctx context.Context, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) updateSpecAnnotation(ctx context.Context, SingleInstance *greatsqlv1.SingleInstance) error {
 	data, err := sonic.Marshal(SingleInstance.Spec)
 	if err != nil {
 		r.Log.Error(err, "Could not marshal spec")
@@ -329,7 +327,7 @@ func (r *SingleInstanceReconciler) updateResource(ctx context.Context, namespace
 }
 
 // updateDeployment updates the deployment
-func (r *SingleInstanceReconciler) updateDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) updateDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	newDeployments := kube.NewDeployment(req.Name+consts.Config, SingleInstance, int(*SingleInstance.Spec.Size))
 	if err := r.updateResource(ctx, req.NamespacedName, newDeployments); err != nil {
 		r.Log.Error(err, "Could not update deployment")
@@ -339,7 +337,7 @@ func (r *SingleInstanceReconciler) updateDeployment(ctx context.Context, req ctr
 }
 
 // updateService updates the service
-func (r *SingleInstanceReconciler) updateService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) updateService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
 	newResources := kube.NewService(req.Name, req.Namespace, consts.SingleInstance, &SingleInstance.ObjectMeta, SingleInstance.Spec.Ports, SingleInstance.Spec.Type)
 	if err := r.updateResource(ctx, req.NamespacedName, newResources); err != nil {
 		r.Log.Error(err, "Could not update service")
@@ -349,7 +347,7 @@ func (r *SingleInstanceReconciler) updateService(ctx context.Context, req ctrl.R
 }
 
 // updateConfigMap updates the configMap
-func (r *SingleInstanceReconciler) updateConfigMap(ctx context.Context, req ctrl.Request, log logr.Logger) error {
+func (r *SingleInstanceReconciler) updateConfigMap(ctx context.Context, req ctrl.Request) error {
 	cnf := &mysql.MySQLConfig{
 		ServerID:                   "0",
 		EnableCluster:              false,
