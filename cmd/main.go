@@ -18,9 +18,7 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"flag"
-	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -38,34 +36,15 @@ import (
 
 	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
 	"github.com/gagraler/greatsql-operator/internal/controller"
-	"github.com/gagraler/greatsql-operator/internal/pkg/version"
-	"github.com/spf13/cobra"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
-
-	rootCmd = &cobra.Command{
-		Use:   "GreatSQL Operator",
-		Short: "GreatSQL Operator CLI Tool",
-		Long:  "GreatSQL Operator CLI Tool is a command line interface for GreatSQL Operator.",
-		Run: func(cmd *cobra.Command, args []string) {
-
-			if len(args) == 0 {
-				run()
-			} else {
-				cobraRootError(cmd, args, errors.New("unknown command"))
-				os.Exit(1)
-			}
-		},
-	}
 )
 
 func init() {
-
-	rootCmd.AddCommand(version.VersionCmd)
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -73,7 +52,7 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
-// TODO: run函数循环复杂度过高，需重构，需考虑kubeBuilder自动生成的代码
+// TODO: main函数循环复杂度过高，需重构，需考虑kubeBuilder自动生成的代码
 // 		 getTLSOptions 获取TLS配置
 // 		 setupManager 设置Manager
 // 		 setupControllers 设置Controllers, 核心部分，如重构后有新增的Controller，需手动注册
@@ -81,7 +60,7 @@ func init() {
 // 		 setupHealthz 设置Healthz
 //		 handleVersionFlag 处理版本号
 
-func run() {
+func main() {
 
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -155,8 +134,8 @@ func run() {
 	}
 
 	if err = (&controller.SingleInstanceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
 		Log:           ctrl.Log.WithName("controllers").WithName("SingleInstance"),
 		EventRecorder: mgr.GetEventRecorderFor("SingleInstance"),
 	}).SetupWithManager(mgr); err != nil {
@@ -196,19 +175,6 @@ func run() {
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
-}
-
-// cobraRootError is a helper function to print error message and exit with code 1
-func cobraRootError(cmd *cobra.Command, args []string, err error) {
-	fmt.Fprintf(os.Stderr, "execute %s args: %v error: %v\n", cmd.Name(), args, err)
-	os.Exit(1)
-}
-
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }
