@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- greatsql_v1_singleinstance.yaml
+- greatsql_v1_groupreplicationclusters.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

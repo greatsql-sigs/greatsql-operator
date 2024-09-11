@@ -1,0 +1,81 @@
+apiVersion: greatsql.greatsql.cn/v1
+kind: SingleInstance
+metadata:
+  labels:
+    app.kubernetes.io/name: greatsql
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: greatsql
+  name: greatsql
+  namespace: greatsql
+  finalizers:
+    - finalizer.greatsql.cn
+spec:
+  # role: SingleInstance
+  size: 1
+  podSpec:
+    affinity:
+      antiAffinityTopologyKey: "kubernetes.io/hostname"
+    annotation:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "3306"
+    labels:
+      app.kubernetes.io/name: greatsql
+      app.kubernetes.io/component: controller
+      app.kubernetes.io/instance: greatsql
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+    terminationGracePeriodSeconds: 30
+    schedulerName: default-scheduler
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    serviceAccountName: default
+    persistentVolumeClaimTemplate: 
+      storageClassName: ebs-gp3-sc
+      resources:
+        requests:
+          # default storage size is 5Gi
+          storage: 5Gi
+    image: greatsql/greatsql:latest
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+    startupProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 5
+      periodSeconds: 20
+    readinessProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 5
+      periodSeconds: 20
+    livenessProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 30
+      periodSeconds: 20
+    securityContext:
+      privileged: false
+    envs:
+      - name: MYSQL_ROOT_PASSWORD
+        value: "GreatSQL@2024"
+    ports:
+      - name: mysql
+        protocol: TCP
+        port: 3306
+        targetPort: mysql
+    type: LoadBalancer
+    dnsPolicy: ClusterFirst
+    upgradeOptions:
+      versionServiceEndpoint: ""
+      apply: ""
+    updateStrategy: RollingUpdate

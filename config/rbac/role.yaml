@@ -1,0 +1,118 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulset
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secret
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - groupreplicationclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - groupreplicationclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - groupreplicationclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singleinstances
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singleinstances/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singleinstances/status
+  verbs:
+  - get
+  - patch
+  - update

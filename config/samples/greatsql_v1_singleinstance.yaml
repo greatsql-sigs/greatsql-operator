@@ -1,0 +1,12 @@
+apiVersion: greatsql.greatsql.cn/v1
+kind: SingleInstance
+metadata:
+  labels:
+    app.kubernetes.io/name: SingleInstance
+    app.kubernetes.io/instance: SingleInstance-sample
+    app.kubernetes.io/part-of: greatsql
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: greatsql
+  name: SingleInstance-sample
+  namespace: greatsql
+spec:

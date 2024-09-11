@@ -1,0 +1,27 @@
+# permissions for end users to view singles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: SingleInstance-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: greatsql
+    app.kubernetes.io/part-of: greatsql
+    app.kubernetes.io/managed-by: kustomize
+  name: SingleInstance-viewer-role
+rules:
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singles/status
+  verbs:
+  - get

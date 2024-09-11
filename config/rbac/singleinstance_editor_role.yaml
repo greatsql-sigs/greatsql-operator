@@ -1,0 +1,31 @@
+# permissions for end users to edit singles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: SingleInstance-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: greatsql
+    app.kubernetes.io/part-of: greatsql
+    app.kubernetes.io/managed-by: kustomize
+  name: SingleInstance-editor-role
+rules:
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - greatsql.greatsql.cn
+  resources:
+  - singles/status
+  verbs:
+  - get

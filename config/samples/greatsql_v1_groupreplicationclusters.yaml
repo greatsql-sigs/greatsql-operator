@@ -1,0 +1,12 @@
+apiVersion: greatsql.greatsql.cn/v1
+kind: GroupReplicationCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: GroupReplicationCluster
+    app.kubernetes.io/instance: GroupReplicationCluster-sample
+    app.kubernetes.io/part-of: greatsql
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: greatsql
+  name: GroupReplicationCluster-sample
+spec:
+  # TODO(user): Add fields here

@@ -1,0 +1,100 @@
+apiVersion: greatsql.greatsql.cn/v1
+kind: GroupReplicationCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: greatsql-mgr
+    app.kubernetes.io/instance: greatsql-mgr
+    app.kubernetes.io/component: controller
+  name: greatsql-mgr
+  namespace: greatsql
+  finalizers:
+    - finalizer.greatsql.cn
+spec:
+  member: 
+    - role: primary
+      size: 1
+    - role: sencondary
+      size: 2
+    - role: arbitrator
+      size: 1
+  clusterSpec:
+    podSpec:
+      affinity:
+        antiAffinityTopologyKey: "kubernetes.io/hostname"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3306"
+      labels:
+        app.kubernetes.io/name: greatsql-mgr
+        app.kubernetes.io/instance: greatsql-mgr
+        app.kubernetes.io/component: controller
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 30
+      schedulerName: default-scheduler
+      podSecurityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      serviceAccountName: default
+      serviceName: greatsql-mgr-headless
+      version: 8.0.26
+      containers:
+        image: greatsql/greatsql:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        startupProbe:
+          tcpSocket:
+            port: 3306
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: 3306
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        livenessProbe:
+          tcpSocket:
+          port: 3306
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        envs:
+          - name: PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: greatsql-mgr-secret
+                key: MYSQL_ROOT_PASSWORD
+        persistentVolumeClaimTemplate: 
+          storageClassName: ebs-gp3-sc
+          resources:
+            requests:
+              # default storage size is 5Gi
+              storage: 5Gi
+    ports:
+      - name: mysql
+        port: 3306
+        targetPort: 3306
+        protocol: TCP
+      - name: mgr-node-comm
+        port: 33060
+        targetPort: 33060
+        protocol: TCP
+    type: LoadBalancer
+    dnsPolicy: ClusterFirst
+    upgradeOptions:
+      versionServiceEndpoint: ""
+      apply: ""
+    updateStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        partition: 0
+        maxUnavailable: 1
