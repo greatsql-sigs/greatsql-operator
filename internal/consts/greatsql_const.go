@@ -25,9 +25,9 @@ const (
 // greatsql port const
 const (
 	// mysql port name
-	MysqlPortName string = "mysql"
+	MySQLPortName string = "mysql"
 	// mysql port
-	MysqlPort int32 = 3306
+	MySQLPort int32 = 3306
 	// mgr port name
 	MgrCommunicaName string = "mgr-node-comm"
 	// mgr node comm port

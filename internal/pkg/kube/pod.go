@@ -50,8 +50,8 @@ func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulS
 			SecurityContext: cr.Containers[0].SecurityContext,
 			Ports: []corev1.ContainerPort{
 				{
-					Name:          consts.MysqlPortName,
-					ContainerPort: consts.MysqlPort,
+					Name:          consts.MySQLPortName,
+					ContainerPort: consts.MySQLPort,
 					Protocol:      corev1.ProtocolTCP,
 				},
 			},
