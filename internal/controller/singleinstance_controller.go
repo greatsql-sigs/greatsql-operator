@@ -48,10 +48,6 @@ type SingleInstanceReconciler struct {
 	EventRecorder record.EventRecorder
 }
 
-var (
-	logger = ctrl.Log.WithName("greatsql-controller-manager")
-)
-
 //+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances/finalizers,verbs=update
@@ -78,10 +74,6 @@ func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if err := r.handleFinalizer(ctx, SingleInstance); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if err := r.validateAndAddFinalizer(SingleInstance, req); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -126,23 +118,6 @@ func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleIn
 			return err
 		}
 		return nil
-	}
-	return nil
-}
-
-// validateAndAddFinalizer validates the spec of the SingleInstance and adds the finalizer
-func (r *SingleInstanceReconciler) validateAndAddFinalizer(SingleInstance *greatsqlv1.SingleInstance, req ctrl.Request) error {
-	if err := r.validateSpec(SingleInstance.Spec, req); err != nil {
-		r.Log.Error(err, "invalid spec, please check")
-		return err
-	}
-	finalizer := &utils.GreatSqlFinalizer{
-		Cli:      r.Client,
-		GreatSql: SingleInstance,
-	}
-	if err := finalizer.AddFinalizer(); err != nil {
-		r.Log.Error(err, "Could not add finalizer")
-		return err
 	}
 	return nil
 }
@@ -226,29 +201,6 @@ func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.R
 		r.Log.Error(err, "Could not update status")
 		return err
 	}
-	return nil
-}
-
-// validateSpec validates the spec of the SingleInstance
-func (r *SingleInstanceReconciler) validateSpec(spec greatsqlv1.SingleInstanceSpec, req ctrl.Request) error {
-	// log := logger.WithValues("Request.Service.Namespace", req.Namespace, "Request.Service.Name", req.Name)
-
-	// validate role and type
-
-	// validate size
-	if spec.Size == nil || *spec.Size == 0 {
-		r.Log.Error(nil, "size is required")
-		r.EventRecorder.Event(&greatsqlv1.SingleInstance{}, corev1.EventTypeWarning, "InvalidSpec", "size is required")
-		return errors.NewBadRequest("size is required")
-	}
-
-	// validate podSpec
-	if spec.PodSpec.PersistentVolumeClaimTemplate.StorageClassName == nil {
-		r.Log.Error(nil, "storageClassName is required")
-		r.EventRecorder.Event(&greatsqlv1.SingleInstance{}, corev1.EventTypeWarning, "InvalidSpec", "storageClassName cannot be empty")
-		return errors.NewBadRequest("storageClassName is required")
-	}
-
 	return nil
 }
 
