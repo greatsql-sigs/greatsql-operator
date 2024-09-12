@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gagraler/greatsql-operator/internal/pkg/version"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/version"
 	"github.com/spf13/cobra"
 )
 

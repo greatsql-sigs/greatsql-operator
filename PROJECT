@@ -6,7 +6,7 @@ domain: greatsql.cn
 layout:
 - go.kubebuilder.io/v4
 projectName: greatsql
-repo: github.com/gagraler/greatsql-operator
+repo: github.com/greatsql-sigs/greatsql-operator
 resources:
 - api:
     crdVersion: v1
@@ -15,7 +15,7 @@ resources:
   domain: greatsql.cn
   group: greatsql
   kind: SingleInstance
-  path: github.com/gagraler/greatsql-operator/api/v1
+  path: github.com/greatsql-sigs/greatsql-operator/api/v1
   version: v1
 - api:
     crdVersion: v1
@@ -24,7 +24,7 @@ resources:
   domain: greatsql.cn
   group: greatsql
   kind: GroupReplicationCluster
-  path: github.com/gagraler/greatsql-operator/api/v1
+  path: github.com/greatsql-sigs/greatsql-operator/api/v1
   version: v1
   webhooks:
     defaulting: true

@@ -7,7 +7,7 @@
 ## Getting Started
 1. 
 ```sh
-git clone https://github.com/gagraler/greatsql-operator
+git clone https://github.com/greatsql-sigs/greatsql-operator
 
 cd greatsql-operator
 
@@ -107,7 +107,7 @@ its dependencies.
 Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project, i.e.:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/gagraler/greatsql/main/dist/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql/main/dist/install.yaml
 ```
 
 ## Contributing

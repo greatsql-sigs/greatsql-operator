@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
+	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
 )
 
 var _ = Describe("SingleInstance Controller", func() {

@@ -30,10 +30,10 @@ GIT_COMMIT = $(shell git rev-parse HEAD)
 BUILD_TIME = $(shell date +"%Y-%m-%d %H:%M:%S")
 
 define ldflags
-"-X 'github.com/gagraler/greatsql-operator/internal/pkg/version.Version=${VERSION}' \
--X 'github.com/gagraler/greatsql-operator/internal/pkg/version.GitBranch=${GIT_BRANCH}' \
--X 'github.com/gagraler/greatsql-operator/internal/pkg/version.GitCommit=${GIT_COMMIT}' \
--X 'github.com/gagraler/greatsql-operator/internal/pkg/version.BuildTime=${BUILD_TIME}'"
+"-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.Version=${VERSION}' \
+-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.GitBranch=${GIT_BRANCH}' \
+-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.GitCommit=${GIT_COMMIT}' \
+-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.BuildTime=${BUILD_TIME}'"
 endef
 
 .PHONY: all

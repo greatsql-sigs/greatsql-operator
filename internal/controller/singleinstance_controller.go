@@ -31,12 +31,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/bytedance/sonic"
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
-	"github.com/gagraler/greatsql-operator/internal/consts"
-	"github.com/gagraler/greatsql-operator/internal/pkg/kube"
-	"github.com/gagraler/greatsql-operator/internal/pkg/mysql"
-	"github.com/gagraler/greatsql-operator/internal/utils"
 	"github.com/go-logr/logr"
+	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
+	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -254,7 +254,7 @@ func (r *SingleInstanceReconciler) validateSpec(spec greatsqlv1.SingleInstanceSp
 
 // watchResource watches the resource
 func (r *SingleInstanceReconciler) watchResource(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) (ctrl.Result, error) {
-	
+
 	// Update spec annotation
 	if err := r.updateSpecAnnotation(ctx, SingleInstance); err != nil {
 		return ctrl.Result{}, err

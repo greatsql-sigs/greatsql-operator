@@ -1,4 +1,4 @@
-module github.com/gagraler/greatsql-operator
+module github.com/greatsql-sigs/greatsql-operator
 
 go 1.21.0
 
