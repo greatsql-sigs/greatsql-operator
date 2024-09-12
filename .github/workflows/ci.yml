@@ -1,15 +1,26 @@
-name: GreatSQL Operator CI
+name: GreatSQL Operator Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: true
+        default: 'develop'
+        type: string
+
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
 
 jobs:
-    build:
+    #build:
+    log-the-inputs:
+
         runs-on: ubuntu-latest
 
         steps:
