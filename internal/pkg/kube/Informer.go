@@ -3,6 +3,7 @@ package kube
 import (
 	"fmt"
 
+	v1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -35,19 +36,6 @@ func informerUpdate[T any](informerFunc func() cache.SharedIndexInformer,
 	}
 	return informer
 }
-
-// informerDelete Informer删除
-// func informerDelete[T any](informerFunc func() cache.SharedIndexInformer,
-// 	eventHandlers EventHandlerFunc) cache.SharedIndexInformer {
-
-// 	informer := informerFunc()
-// 	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-// 		DeleteFunc: eventHandlers.DeleteFunc,
-// 	}); err != nil {
-// 		panic(err)
-// 	}
-// 	return informer
-// }
 
 // PodInformer Pod Informer
 func PodInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
@@ -127,6 +115,34 @@ func PersistentVolumeClaimInformer(factory informers.SharedInformerFactory) cach
 
 			if oldPVC.Status.Phase != newPVC.Status.Phase {
 				fmt.Printf("PVC %s has been updated. Phase: %s\n", newPVC.Name, newPVC.Status.Phase)
+			}
+		},
+	})
+}
+
+// SingleInstanceInformer SingleInstance Informer
+// Custom Resource Definition Informer
+func SingleInstanceInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+	return informerUpdate[v1.SingleInstance](factory.Core().V1().Pods().Informer, EventHandlerFunc{
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldPod := oldObj.(*v1.SingleInstance)
+			newPod := newObj.(*v1.SingleInstance)
+			if oldPod.Status.Replicas != newPod.Status.Replicas {
+				fmt.Printf("Instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
+			}
+		},
+	})
+}
+
+// GroupReplicationClusterInformer GroupReplicationCluster Informer
+// Custom Resource Definition Informer
+func GroupReplicationClusterInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+	return informerUpdate[v1.GroupReplicationCluster](factory.Core().V1().Pods().Informer, EventHandlerFunc{
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldPod := oldObj.(*v1.GroupReplicationCluster)
+			newPod := newObj.(*v1.GroupReplicationCluster)
+			if oldPod.Status.Replicas != newPod.Status.Replicas {
+				fmt.Printf("Cluster instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
 			}
 		},
 	})
