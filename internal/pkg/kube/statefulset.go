@@ -26,6 +26,13 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 	}
 	affinity := cr.PodAffinity(labels)
 
+	replicas := int32(0)
+	for _, member := range cr.Spec.Member {
+		if member.Size != nil {
+			replicas += *member.Size
+		}
+	}
+
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -44,19 +51,17 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 			Labels: labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:    cr.Spec.Member[0].Size,
+			Replicas: &replicas,
+			//Replicas:    cr.Spec.Member[0].Size,
 			ServiceName: serviceName,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						consts.AppKubernetesName: cr.Name,
-					},
+					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					// InitContainers:                NewInitContainers(cr.Name, cr.Spec.ClusterSpec.PodSpec, cr.Spec.ClusterSpec.Ports),
 					Containers:                    NewContainers(cr.Name, cr.Spec.ClusterSpec.PodSpec, ordinal, true),
 					TerminationGracePeriodSeconds: cr.Spec.ClusterSpec.PodSpec.TerminationGracePeriodSeconds,
 					SchedulerName:                 cr.Spec.ClusterSpec.PodSpec.SchedulerName,
