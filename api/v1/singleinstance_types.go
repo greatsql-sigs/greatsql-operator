@@ -33,7 +33,6 @@ import (
 type SingleInstanceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 
-	// //+kubebuilder:validation:Enum=Sinlge;GroupReplicationCluster
 	// Category   GreatSqlType                  `json:"category,omitempty"`
 	// Role           MemberRole                    `json:"role,omitempty"`
 	Size           *int32                        `json:"size,omitempty"`

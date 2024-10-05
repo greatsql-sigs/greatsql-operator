@@ -1409,7 +1409,6 @@ spec:
                 type: array
               size:
                 description: |-
-                  //+kubebuilder:validation:Enum=Sinlge;GroupReplicationCluster
                   Category   GreatSqlType                  `json:"category,omitempty"`
                   Role           MemberRole                    `json:"role,omitempty"`
                 format: int32
