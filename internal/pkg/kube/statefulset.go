@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"fmt"
 	"strconv"
 
 	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
@@ -72,7 +73,7 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 					Tolerations:                   cr.Spec.ClusterSpec.PodSpec.Tolerations,
 					Volumes: []corev1.Volume{
 						{
-							Name: cr.Name + consts.Config,
+							Name: fmt.Sprintf("%s-%s", cr.Name, consts.Config),
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
@@ -91,7 +92,7 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 							// },
 						},
 					},
-					DNSPolicy: cr.Spec.ClusterSpec.DnsPolicy,
+					DNSPolicy: cr.Spec.ClusterSpec.PodSpec.DnsPolicy,
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -111,7 +112,6 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 			},
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: cr.Spec.ClusterSpec.UpdateStrategy.Type,
-				// Type: appsv1.RollingUpdateStatefulSetStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
 					Partition:      cr.Spec.ClusterSpec.UpdateStrategy.RolelingUpdate.Partition,
 					MaxUnavailable: cr.Spec.ClusterSpec.UpdateStrategy.RolelingUpdate.MaxUnavailable,

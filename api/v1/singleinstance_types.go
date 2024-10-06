@@ -18,7 +18,6 @@ package v1
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -35,11 +34,9 @@ type SingleInstanceSpec struct {
 
 	// Category   GreatSqlType                  `json:"category,omitempty"`
 	// Role           MemberRole                    `json:"role,omitempty"`
-	Size           *int32                        `json:"size,omitempty"`
-	PodSpec        PodSpec                       `json:"podSpec,omitempty"`
-	Ports          []corev1.ServicePort          `json:"ports,omitempty"`
-	Type           corev1.ServiceType            `json:"type,omitempty"`
-	DnsPolicy      corev1.DNSPolicy              `json:"dnsPolicy,omitempty"`
+	Size           *int32  `json:"size,omitempty"`
+	PodSpec        PodSpec `json:"podSpec,omitempty"`
+	ServiceExpose  `json:",omitempty"`
 	UpgradeOptions UpgradeOptions                `json:"upgradeOptions,omitempty"`
 	UpdateStrategy appsv1.DeploymentStrategyType `json:"updateStrategy,omitempty"`
 }

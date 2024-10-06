@@ -56,8 +56,15 @@ spec:
           spec:
             description: SingleInstance defines the desired state of SingleInstance
             properties:
-              dnsPolicy:
-                description: DNSPolicy defines how a pod's DNS will be configured.
+              annotations:
+                additionalProperties:
+                  type: string
+                type: object
+              labels:
+                additionalProperties:
+                  type: string
+                type: object
+              loadBalancerClass:
                 type: string
               podSpec:
                 description: PodSpec defines the desired state of Pod
@@ -78,7 +85,7 @@ spec:
                       description: ContainerSpec defines the desired state of the
                         container
                       properties:
-                        envs:
+                        env:
                           items:
                             description: EnvVar represents an environment variable
                               present in a Container.
@@ -365,6 +372,8 @@ spec:
                               format: int32
                               type: integer
                           type: object
+                        name:
+                          type: string
                         readinessProbe:
                           description: |-
                             Probe describes a health check to be performed against a container to determine whether it is
@@ -900,8 +909,12 @@ spec:
                           type: object
                       required:
                       - image
+                      - name
                       type: object
                     type: array
+                  dnsPolicy:
+                    description: DNSPolicy defines how a pod's DNS will be configured.
+                    type: string
                   labels:
                     additionalProperties:
                       type: string
@@ -1407,6 +1420,10 @@ spec:
                   - port
                   type: object
                 type: array
+              selector:
+                additionalProperties:
+                  type: string
+                type: object
               size:
                 description: |-
                   Category   GreatSqlType                  `json:"category,omitempty"`

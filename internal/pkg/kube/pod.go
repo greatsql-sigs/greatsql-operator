@@ -16,7 +16,54 @@ import (
  * @description: kubernetes pod operation
  */
 
-// NewContainers returns a new container
+// NewContainers returns a new slice of containers based on the provided PodSpec and ordinal.
+// func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
+// 	var containers []corev1.Container
+
+// 	for i, containerSpec := range cr.Containers {
+
+// 		volumeMounts := []corev1.VolumeMount{
+// 			{
+// 				Name:      fmt.Sprintf("%s-%s", name, consts.Config),
+// 				MountPath: consts.ConfigDir + consts.ConfigFile,
+// 				SubPath:   consts.ConfigFile,
+// 			},
+// 			{
+// 				Name:      fmt.Sprintf("%s-%s", name, consts.DB),
+// 				MountPath: consts.DB,
+// 			},
+// 		}
+
+// 		if isStatefulSet {
+// 			for j := range volumeMounts {
+// 				volumeMounts[j].Name = fmt.Sprintf("%s-%d", volumeMounts[j].Name, ordinal)
+// 			}
+// 		}
+
+// 		containers = append(containers, corev1.Container{
+// 			Name:            fmt.Sprintf("%s-%d", name, i),
+// 			Image:           containerSpec.Image,
+// 			Resources:       containerSpec.Resources,
+// 			StartupProbe:    &containerSpec.StartupProbe,
+// 			ReadinessProbe:  &containerSpec.ReadinessProbe,
+// 			LivenessProbe:   &containerSpec.LivenessProbe,
+// 			SecurityContext: containerSpec.SecurityContext,
+// 			Ports: []corev1.ContainerPort{
+// 				{
+// 					Name:          consts.MySQLPortName,
+// 					ContainerPort: consts.MySQLPort,
+// 					Protocol:      corev1.ProtocolTCP,
+// 				},
+// 			},
+// 			ImagePullPolicy: containerSpec.ImagePullPolicy,
+// 			Env:             containerSpec.Envs,
+// 			VolumeMounts:    volumeMounts,
+// 		})
+// 	}
+
+// 	return containers
+// }
+
 func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
 
 	var volumeMounts []corev1.VolumeMount
@@ -41,7 +88,7 @@ func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulS
 
 	return []corev1.Container{
 		{
-			Name:            name,
+			Name:            cr.Containers[0].Name,
 			Image:           cr.Containers[0].Image,
 			Resources:       cr.Containers[0].Resources,
 			StartupProbe:    &cr.Containers[0].StartupProbe,
@@ -87,7 +134,7 @@ func NewPod(configMapName string, cr *greatsqlv1.GroupReplicationCluster, ordina
 			Tolerations:                   cr.Spec.ClusterSpec.PodSpec.Tolerations,
 			Volumes: []corev1.Volume{
 				{
-					Name: cr.Name + consts.Config,
+					Name: fmt.Sprintf("%s-%s", cr.Name, consts.Config),
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
@@ -106,7 +153,7 @@ func NewPod(configMapName string, cr *greatsqlv1.GroupReplicationCluster, ordina
 					},
 				},
 			},
-			DNSPolicy: cr.Spec.ClusterSpec.DnsPolicy,
+			//DNSPolicy: cr.Spec.ClusterSpec.DnsPolicy,
 		},
 	}
 }

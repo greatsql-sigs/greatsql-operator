@@ -200,7 +200,7 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 
 // createService creates a Service for the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
-	service := kube.NewService(req.Name, req.Namespace, consts.GroupReplicationCluster, &mgr.ObjectMeta, mgr.Spec.ClusterSpec.Ports, mgr.Spec.ClusterSpec.Type)
+	service := kube.NewService(req.Name, req.Namespace, mgr.Spec.ClusterSpec.ServiceExpose)
 	service.Name = fmt.Sprintf("%s-headless", req.Name)
 	service.Spec.ClusterIP = corev1.ClusterIPNone
 	if err := r.Client.Create(ctx, service); err != nil {
@@ -272,6 +272,5 @@ func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.Gr
 func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&greatsqlv1.GroupReplicationCluster{}).
-		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }

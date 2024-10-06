@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -66,7 +67,7 @@ type SingleInstanceReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	r.Log.Info("Reconciling SingleInstance GreatSql...")
+	r.Log.Info("Reconciling GreatSQL Single Instance...")
 
 	SingleInstance := &greatsqlv1.SingleInstance{}
 	if err := r.getSingleInstance(ctx, req, SingleInstance); err != nil {
@@ -180,7 +181,8 @@ func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Conte
 
 // createDeployment creates a Deployment for the SingleInstance
 func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
-	deploy := kube.NewDeployment(req.Name+consts.Config, SingleInstance, int(*SingleInstance.Spec.Size))
+	configMapName := fmt.Sprintf("%s-%s", req.Name, consts.Config)
+	deploy := kube.NewDeployment(configMapName, SingleInstance, int(*SingleInstance.Spec.Size))
 	if err := r.Client.Create(ctx, deploy); err != nil {
 		r.Log.Error(err, "Could not create deployment")
 		return err
@@ -191,7 +193,7 @@ func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctr
 
 // createService creates a Service for the SingleInstance
 func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
-	service := kube.NewService(req.Name, req.Namespace, consts.SingleInstance, &SingleInstance.ObjectMeta, SingleInstance.Spec.Ports, SingleInstance.Spec.Type)
+	service := kube.NewService(req.Name, req.Namespace, SingleInstance.Spec.ServiceExpose)
 	if err := r.Client.Create(ctx, service); err != nil {
 		r.Log.Error(err, "Could not create service")
 		return err
@@ -255,10 +257,10 @@ func (r *SingleInstanceReconciler) updateSpecAnnotation(ctx context.Context, Sin
 func (r *SingleInstanceReconciler) updateResource(ctx context.Context, namespacedName types.NamespacedName, obj client.Object) error {
 	existing := obj.DeepCopyObject().(client.Object)
 	err := r.Client.Get(ctx, namespacedName, existing)
-	existing.SetAnnotations(obj.GetAnnotations())
-	existing.SetLabels(obj.GetLabels())
-	existing.SetOwnerReferences(obj.GetOwnerReferences())
-	existing.SetFinalizers(obj.GetFinalizers())
+	// existing.SetAnnotations(obj.GetAnnotations())
+	// existing.SetLabels(obj.GetLabels())
+	// existing.SetOwnerReferences(obj.GetOwnerReferences())
+	// existing.SetFinalizers(obj.GetFinalizers())
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -275,12 +277,24 @@ func (r *SingleInstanceReconciler) updateResource(ctx context.Context, namespace
 		}
 	}
 
-	return r.Client.Update(ctx, existing)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Client.Get(ctx, namespacedName, existing); err != nil {
+			return err
+		}
+		existing.SetAnnotations(obj.GetAnnotations())
+		existing.SetLabels(obj.GetLabels())
+		existing.SetOwnerReferences(obj.GetOwnerReferences())
+		existing.SetFinalizers(obj.GetFinalizers())
+		return r.Client.Update(ctx, existing)
+	})
+
+	//return r.Client.Update(ctx, existing)
 }
 
 // updateDeployment updates the deployment
 func (r *SingleInstanceReconciler) updateDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
-	newDeployments := kube.NewDeployment(req.Name+consts.Config, SingleInstance, int(*SingleInstance.Spec.Size))
+	configMapName := fmt.Sprintf("%s-%s", req.Name, consts.Config)
+	newDeployments := kube.NewDeployment(configMapName, SingleInstance, int(*SingleInstance.Spec.Size))
 	if err := r.updateResource(ctx, req.NamespacedName, newDeployments); err != nil {
 		r.Log.Error(err, "Could not update deployment")
 		return err
@@ -290,7 +304,7 @@ func (r *SingleInstanceReconciler) updateDeployment(ctx context.Context, req ctr
 
 // updateService updates the service
 func (r *SingleInstanceReconciler) updateService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) error {
-	newResources := kube.NewService(req.Name, req.Namespace, consts.SingleInstance, &SingleInstance.ObjectMeta, SingleInstance.Spec.Ports, SingleInstance.Spec.Type)
+	newResources := kube.NewService(req.Name, req.Namespace, SingleInstance.Spec.ServiceExpose)
 	if err := r.updateResource(ctx, req.NamespacedName, newResources); err != nil {
 		r.Log.Error(err, "Could not update service")
 		return err
@@ -328,6 +342,7 @@ func (r *SingleInstanceReconciler) updateStatus(ctx context.Context, singleGreat
 	// log := logger.WithValues("Request.Service.Namespace", singleGreatsql.Namespace, "Request.Service.Name", singleGreatsql.Name)
 
 	accessPoint := utils.GetServiceAccessPoint(svc)
+	r.Log.Info("AccessPoint", accessPoint)
 
 	status := &greatsqlv1.SingleInstanceStatus{
 		AccessPoint: accessPoint,
@@ -340,7 +355,7 @@ func (r *SingleInstanceReconciler) updateStatus(ctx context.Context, singleGreat
 		return nil
 	}
 
-	singleGreatsql.Status = *status
+	singleGreatsql.Status = *status.DeepCopy()
 
 	// update status
 	if err := r.Client.Status().Update(ctx, singleGreatsql); err != nil {
@@ -355,6 +370,5 @@ func (r *SingleInstanceReconciler) updateStatus(ctx context.Context, singleGreat
 func (r *SingleInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&greatsqlv1.SingleInstance{}).
-		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }

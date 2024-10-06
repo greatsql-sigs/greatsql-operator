@@ -52,10 +52,8 @@ const (
 )
 
 type MySQLGroupReplicationCluster struct {
-	PodSpec        *PodSpec                       `json:"podSpec,omitempty"`
-	Ports          []corev1.ServicePort           `json:"ports,omitempty"`
-	Type           corev1.ServiceType             `json:"type,omitempty"`
-	DnsPolicy      corev1.DNSPolicy               `json:"dnsPolicy,omitempty"`
+	PodSpec        *PodSpec `json:"podSpec,omitempty"`
+	ServiceExpose  `json:",omitempty"`
 	UpgradeOptions UpgradeOptions                 `json:"upgradeOptions,omitempty"`
 	UpdateStrategy *StatefulSetUpdateStrategyType `json:"updateStrategy,omitempty"`
 	// Partition      *int32                         `json:"partition,omitempty"`
@@ -96,21 +94,20 @@ type MetricsCollection struct {
 
 // PodSpec defines the desired state of Pod
 type PodSpec struct {
-	Affinity                      *PodAffinity               `json:"affinity,omitempty"` // pod affinity(pod亲和性)
-	Annotation                    map[string]string          `json:"annotation,omitempty"`
-	Labels                        map[string]string          `json:"labels,omitempty"`
-	NodeSelector                  map[string]string          `json:"nodeSelector,omitempty"`
-	Tolerations                   []corev1.Toleration        `json:"tolerations,omitempty"`                   //schedule tolerations
-	TerminationGracePeriodSeconds *int64                     `json:"terminationGracePeriodSeconds,omitempty"` // 在规定时间内停止pod，俗称 优雅停机
-	SchedulerName                 string                     `json:"schedulerName,omitempty"`
-	PodSecurityContext            *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
-	ServiceAccountName            string                     `json:"serviceAccountName,omitempty"`
-	ServiceName                   string                     `json:"serviceName,omitempty"`
-	Version                       string                     `json:"version,omitempty"`
-	//+Optional
+	Affinity                      *PodAffinity                      `json:"affinity,omitempty"` // pod affinity(pod亲和性)
+	Annotation                    map[string]string                 `json:"annotation,omitempty"`
+	Labels                        map[string]string                 `json:"labels,omitempty"`
+	NodeSelector                  map[string]string                 `json:"nodeSelector,omitempty"`
+	Tolerations                   []corev1.Toleration               `json:"tolerations,omitempty"`                   //schedule tolerations
+	TerminationGracePeriodSeconds *int64                            `json:"terminationGracePeriodSeconds,omitempty"` // 在规定时间内停止pod，俗称 优雅停机
+	SchedulerName                 string                            `json:"schedulerName,omitempty"`
+	PodSecurityContext            *corev1.PodSecurityContext        `json:"podSecurityContext,omitempty"`
+	ServiceAccountName            string                            `json:"serviceAccountName,omitempty"`
+	ServiceName                   string                            `json:"serviceName,omitempty"`
+	Version                       string                            `json:"version,omitempty"`
 	Containers                    []ContainerSpec                   `json:"containers,omitempty"` // container spec
 	PersistentVolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimTemplate,omitempty"`
-	// Storage    *Storage        `json:"storage,omitempty"`
+	DnsPolicy                     corev1.DNSPolicy                  `json:"dnsPolicy,omitempty"`
 }
 
 // TODO: not implemented yet
@@ -131,6 +128,7 @@ type PodAffinity struct {
 
 // ContainerSpec defines the desired state of the container
 type ContainerSpec struct {
+	Name             string                        `json:"name"`                       // Name of the container
 	Image            string                        `json:"image"`                      // Image of the container
 	ImagePullPolicy  corev1.PullPolicy             `json:"imagePullPolicy,omitempty"`  // Image pull policy
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"` // Image pull secrets
@@ -139,7 +137,7 @@ type ContainerSpec struct {
 	ReadinessProbe   corev1.Probe                  `json:"readinessProbe,omitempty"`   // Readiness probe
 	LivenessProbe    corev1.Probe                  `json:"livenessProbe,omitempty"`    // Liveness probe
 	SecurityContext  *corev1.SecurityContext       `json:"securityContext,omitempty"`  // Security context for the container
-	Envs             []corev1.EnvVar               `json:"envs,omitempty"`             // Environment variables
+	Envs             []corev1.EnvVar               `json:"env,omitempty"`              // Environment variables
 }
 
 // UpgradeOptions defines the desired state of UpgradeOptions
@@ -150,17 +148,12 @@ type UpgradeOptions struct {
 
 // ServiceExpose defines the desired state of ServiceExpose
 type ServiceExpose struct {
-	Enabled                  bool                                    `json:"enabled,omitempty"`
-	Type                     corev1.ServiceType                      `json:"type,omitempty"`
-	LoadBalancerSourceRanges []string                                `json:"loadBalancerSourceRanges,omitempty"`
-	LoadBalancerIP           string                                  `json:"loadBalancerIP,omitempty"`
-	Annotations              map[string]string                       `json:"annotations,omitempty"`
-	Labels                   map[string]string                       `json:"labels,omitempty"`
-	ExternalTrafficPolicy    corev1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty"`
-	InternalTrafficPolicy    corev1.ServiceInternalTrafficPolicy     `json:"internalTrafficPolicy,omitempty"`
-
-	// Deprecated: Use ExternalTrafficPolicy instead
-	TrafficPolicy corev1.ServiceExternalTrafficPolicyType `json:"trafficPolicy,omitempty"`
+	Labels            map[string]string    `json:"labels,omitempty"`
+	Annotations       map[string]string    `json:"annotations,omitempty"`
+	Type              corev1.ServiceType   `json:"type,omitempty"`
+	Ports             []corev1.ServicePort `json:"ports,omitempty"`
+	Selector          map[string]string    `json:"selector,omitempty"`
+	LoadBalancerClass *string              `json:"loadBalancerClass,omitempty"`
 }
 
 // PodAffinity returns the SingleInstance pod affinity of the resource

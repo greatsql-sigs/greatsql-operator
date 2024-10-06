@@ -1,6 +1,8 @@
 package kube
 
 import (
+	"fmt"
+
 	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +29,7 @@ func NewPersistentVolumeClaim(name, namespace string, cr *greatsqlv1.PodSpec) *c
 			Kind:       "PersistentVolumeClaim",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name + consts.DB,
+			Name:      fmt.Sprintf("%s-%s", name, consts.DB),
 			Namespace: namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
