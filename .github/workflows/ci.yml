@@ -7,15 +7,15 @@ on:
       branch:
         description: 'Branch to build'
         required: true
-        default: 'develop'
+        default: 'main'
         type: string
 
-  # push:
-  #   branches:
-  #     - main
-  # pull_request:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
     #build:
@@ -31,7 +31,7 @@ jobs:
         - name: 'Setup Go'
           uses: actions/setup-go@v2
           with:
-            go-version: '1.21'
+            go-version: '1.23'
 
         - name: 'Install Go dependencies'
           run: go mod download
@@ -58,8 +58,8 @@ jobs:
           run: |
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-6)
             IMAGE_TAG=${{ github.repository }}:${SHORT_SHA}
-            docker buildx build --push --tag registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} .
-            docker tag registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:latest
+            docker buildx build --push --tag registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} .
+            docker tag registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
 
         - name: 'Create a release for Tag'
           id: create_release
