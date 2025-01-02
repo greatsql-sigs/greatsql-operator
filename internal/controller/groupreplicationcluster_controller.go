@@ -112,7 +112,7 @@ func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context,
 	}
 
 	// Wait for pods to be ready before initializing cluster
-	if err := r.waitForPodsReady(ctx, req, mgr); err != nil {
+	if err := r.waitForPodsReady(ctx, req); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context,
 }
 
 // waitForPodsReady waits for all pods to be ready
-func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context, req ctrl.Request) error {
 	labels := map[string]string{
 		consts.AppKubernetesName:     req.Name,
 		consts.AppKubernetesInstance: req.Name,
