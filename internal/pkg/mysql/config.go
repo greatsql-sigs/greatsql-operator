@@ -40,8 +40,6 @@ func (c *MySQLConfig) String(cnf MySQLConfig) (string, error) {
 	c.ReportPort = cnf.ReportPort
 	c.InnodbBufferPoolSize = cnf.InnodbBufferPoolSize
 
-	// 输出执行路径
-	// fmt.Println(os.Getwd())
 	tmpl, err := template.ParseFS(tmplFS, "tmpl/my.cnf.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %v", err)
