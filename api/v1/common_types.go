@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,8 +35,8 @@ import (
 // Category defines the type of the GreatSql
 // Supported values are "SingleInstance" "GroupReplicationCluster"
 // SingleInstance: SingleInstance instance of GreatSql
-// ReplicaofCluster: Master-slave replication cluster
-// TODO: GroupReplicationCluster: GroupReplicationCluster of a GreatSql cluster(MGR)
+// TODO: ReplicaofCluster: Master-slave replication cluster
+// GroupReplicationCluster: GroupReplicationCluster of a GreatSql cluster(MGR)
 // type Category string
 
 // const (
@@ -50,6 +52,21 @@ const (
 	SencondaryRole MemberRole = "sencondary"
 	ArbitratorRole MemberRole = "arbitrator"
 )
+
+type State string
+
+const (
+	StateInitializing State = "initializing"
+	StateRunning      State = "running"
+	StateStoping      State = "stopping"
+	StateReady        State = "ready"
+	StateError        State = "error"
+	StatePaused       State = "paused"
+)
+
+func (s State) String() string {
+	return cases.Title(language.English).String(string(s))
+}
 
 type MySQLGroupReplicationCluster struct {
 	PodSpec        *PodSpec `json:"podSpec,omitempty"`
