@@ -66,5 +66,5 @@ const (
 
 const (
 	// GreatSqlFinalizer is the finalizer name for the GreatSql
-	GreatSqlFinalizer string = "finalizer.greatsql.cn"
+	GreatSqlFinalizer string = "greatsql.greatsql.cn"
 )
