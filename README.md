@@ -1,91 +1,31 @@
 # greatsql-operator
-// TODO(user): Add simple overview of use/purpose
+
+[![GitHub stars](https://img.shields.io/github/stars/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/issues)
+[![GitHub license](https://img.shields.io/github/license/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/blob/main/LICENSE)
+
+[简体中文](./README_zh.md)
+
+GreatSQL Operator enables bulletproof GreatSQL on Kubernetes. It manages all the necessary resources for deploying and managing a highly available GreatSQL cluster. It provides effortless backups, while keeping the cluster highly available.
+
+🍺 🍕 ☕ If the operator has helped you out with your projects, please consider sponsoring it to speed up the development. Issues are answered in this repo on a best-effort basis.
+
+This operator is developed and maintained by the GreatSQL sigs community and is open source.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+GreatSQL Operator is a tool for deploying and managing GreatSQL database clusters on Kubernetes. It provides the following core features:
 
-## Getting Started
-1. 
-```sh
-git clone https://github.com/greatsql-sigs/greatsql-operator
+- Automated deployment and management of GreatSQL single instances and clusters (MGR)
+- Automatic failover and self-healing capabilities
+- Backup and recovery management
+- Monitoring integration
+- Resource usage optimization
+- Rolling upgrade support
 
-cd greatsql-operator
+This project is developed based on the Kubernetes Operator pattern and allows you to manage GreatSQL databases just like native Kubernetes resources.
 
-# install crds
-kubectl apply -f config/crd/bases/*.yaml
-
-# install and run operaotr
-kubectl apply -f 
-
-# install greatsql-operator/single instance
-kubectl apply -f example/ns/ns.yaml
-kubectl apply -f example/single/singleinstance.yaml
-
-# install greatsql-operator/group replication cluster (mgr)
-kubectl apply -f example/ns/ns.yaml
-kubectl apply -f example/cluster/groupreplicationcluster.yaml
-```
-
-
-### Prerequisites
-- go version v1.21.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.22.0=+ cluster.
-
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
-
-```sh
-make docker-build docker-push IMG=registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:tag
-```
-
-**NOTE:** This image ought to be published in the personal registry you specified. 
-And it is required to have access to pull the image from the working environment. 
-Make sure you have the proper permission to the registry if the above commands don’t work.
-
-**Install the CRDs into the cluster:**
-
-```sh
-make install
-```
-
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:tag
-```
-
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin 
-privileges or be logged in as admin.
-
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
-
-```sh
-kubectl apply -k config/samples/
-```
-
->**NOTE**: Ensure that the samples has default values to test it out.
-
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
-
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
+## Installation
+For detailed deployment instructions, please refer to the [Deployment Guide](docs/deployment_guide.md).
 
 ## Project Distribution
 
@@ -94,7 +34,7 @@ Following are the steps to build the installer and distribute this project to us
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make build-installer IMG=registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:tag
+make build-installer IMG=registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:tag
 ```
 
 NOTE: The makefile target mentioned above generates an 'install.yaml'
@@ -104,18 +44,39 @@ its dependencies.
 
 2. Using the installer
 
-Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project, i.e.:
-
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql/main/dist/install.yaml
 ```
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+Please see our [Contributing Guidelines](./CONTRIBUTING.md) for details on how to contribute to this project.
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
+## Roadmap
+ - [ ] webhooks validation
+ - [ ] Multi-master and cluster
+ - [ ] Proxy SQL integration
+ - [ ] Logical backup
+ - [ ] Physical backups 
+ - [ ] [Prometheus](https://github.com/prometheus/prometheus) metrics exporter
 
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+## Version Notes
+### v1.0.1 (current version)
+- Initial release version
+- Core features:
+- Support GreatSQL single instance deployment
+- Support GreatSQL MGR cluster deployment
+- Developed based on Kubebuilder v4 framework
+- Support automatic failover
+- Support rolling upgrade
+- Support resource usage optimization
+
+### Known issues
+- Webhook verification function is not yet completed
+- Backup function is still under development
+- Prometheus indicator exporter is not yet implemented
+
+### Subsequent plans
+Please refer to the [Roadmap](#Roadmap) section for future version plans.
 
 ## License
 
