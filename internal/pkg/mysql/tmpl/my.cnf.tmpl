@@ -3,14 +3,14 @@ socket    = /data/GreatSQL/mysql.sock
 
 [mysql]
 loose-skip-binary-as-hex
-prompt = "(\\D)[\\u@GreatSQL][\\d]>"
+prompt = "([\\u@GreatSQL][\\d]>"
 no-auto-rehash
 
 [mysqld]
 user    = mysql
 port    = 3306
 server_id = {{.ServerID}}
-basedir = /usr/
+basedir = /usr/local/GreatSQL
 datadir    = /data/GreatSQL
 socket    = /data/GreatSQL/mysql.sock
 pid-file = mysql.pid
