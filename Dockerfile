@@ -1,5 +1,6 @@
 # Build the manager binary
-FROM golang:1.21 AS builder
+# registry.cn-beijing.aliyuncs.com/greatsql/golang:1.23
+FROM golang:1.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -32,7 +33,7 @@ RUN make build
 # FROM gcr.io/distroless/static:nonroot
 FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /app/greatsql-operator .
+COPY --from=builder /app/greatsql-controller-manager .
 USER 65532:65532
 
-ENTRYPOINT ["/greatsql-operator"]
+ENTRYPOINT ["/greatsql-controller-manager"]
