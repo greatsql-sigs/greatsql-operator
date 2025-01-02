@@ -7,8 +7,6 @@ metadata:
     app.kubernetes.io/instance: greatsql
   name: greatsql-single
   namespace: greatsql
-  finalizers:
-    - finalizer.greatsql.cn
 spec:
   size: 1
   podSpec:
@@ -30,10 +28,10 @@ spec:
       runAsUser: 0
       runAsGroup: 0
     serviceAccountName: default
-    version: "latest"
+    version: "8.0.32-26"
     containers:
       - name: greatsql
-        image: "greatsql/greatsql:latest"
+        image: "greatsql/greatsql:8.0.32-26"
         imagePullPolicy: IfNotPresent
         resources:
           requests:
@@ -74,7 +72,6 @@ spec:
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
     service.beta.kubernetes.io/aws-load-balancer-internal: external
-    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012
   selector:
       app.kubernetes.io/name: greatsql-single
   ports:

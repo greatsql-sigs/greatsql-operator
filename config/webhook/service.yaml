@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: greatsql
     app.kubernetes.io/managed-by: kustomize
   name: webhook-service
-  namespace: system
+  namespace: greatsql-system
 spec:
   ports:
     - port: 443
