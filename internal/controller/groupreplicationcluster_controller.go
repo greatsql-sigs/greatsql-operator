@@ -83,30 +83,68 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 
 // createResources creates the resources for the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+	// Create common resources first
 	if err := r.createSecret(ctx, req, mgr); err != nil {
 		return err
 	}
 
+	if err := r.createService(ctx, req, mgr); err != nil {
+		return err
+	}
+
+	// Create resources for each member
 	size := mgr.Spec.Member[0].GetSize()
-	for ordinal := 1; ordinal <= int(size); ordinal++ {
+	for ordinal := 0; ordinal < int(size); ordinal++ { // Changed from 1 to 0 to include first node
+		// Create ConfigMap for each member
 		if err := r.createConfigMap(ctx, req, mgr, ordinal); err != nil {
 			return err
 		}
 
+		// Create PVC for each member
 		if err := r.createPersistentVolumeClaim(ctx, req, mgr, ordinal); err != nil {
 			return err
 		}
 
+		// Create StatefulSet for each member
 		if err := r.createStatefulSet(ctx, req, mgr, ordinal); err != nil {
 			return err
 		}
+	}
 
+	// Wait for pods to be ready before initializing cluster
+	if err := r.waitForPodsReady(ctx, req, mgr); err != nil {
+		return err
+	}
+
+	// Initialize cluster after all pods are ready
+	for ordinal := 0; ordinal < int(size); ordinal++ {
 		if err := r.initializeCluster(mgr, ordinal); err != nil {
 			return err
 		}
 	}
 
-	return r.createService(ctx, req, mgr)
+	return nil
+}
+
+// waitForPodsReady waits for all pods to be ready
+func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+	labels := map[string]string{
+		consts.AppKubernetesName:     req.Name,
+		consts.AppKubernetesInstance: req.Name,
+	}
+
+	pods, err := kube.PodsByLabels(ctx, r.Client, labels, req.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get pods: %v", err)
+	}
+
+	for _, pod := range pods {
+		if !kube.IsPodReady(&pod) {
+			return fmt.Errorf("pod %s is not ready", pod.Name)
+		}
+	}
+
+	return nil
 }
 
 // createSecret creates a Secret for the GroupReplicationCluster
