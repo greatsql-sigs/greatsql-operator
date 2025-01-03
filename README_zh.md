@@ -7,7 +7,7 @@ GreatSQL Operator 为 Kubernetes 提供稳固可靠的 GreatSQL 支持。它管�
 
 🍺 🍕 ☕ 如果这个 operator 帮助了您的项目，请考虑赞助以加快开发进度。本仓库的问题将尽最大努力回答。
 
-本 operator 由 GreatSQL sigs 社区开发和维护，并且是开源的。
+本项目由 GreatSQL sigs 社区开发和维护，并且是开源的，遵循 [Apache 2.0](LICENSE) 许可证。
 
 ## 项目描述
 GreatSQL Operator 是一个用于在 Kubernetes 上部署和管理 GreatSQL 数据库集群的工具。它提供以下核心功能：

@@ -4,15 +4,13 @@
 [![GitHub issues](https://img.shields.io/github/issues/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/issues)
 [![GitHub license](https://img.shields.io/github/license/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/blob/main/LICENSE)
 
-[简体中文](./README_zh.md)
+GreatSQL Operator provides robust and reliable support for GreatSQL on Kubernetes. It manages all the resources needed for deploying and managing highly available GreatSQL clusters. It also offers easy backup functionality while maintaining high availability of the cluster.
 
-GreatSQL Operator enables bulletproof GreatSQL on Kubernetes. It manages all the necessary resources for deploying and managing a highly available GreatSQL cluster. It provides effortless backups, while keeping the cluster highly available.
+🍺 🍕 ☕ If this operator has helped your project, please consider sponsoring to accelerate development. Issues in this repository will be addressed on a best-effort basis.
 
-🍺 🍕 ☕ If the operator has helped you out with your projects, please consider sponsoring it to speed up the development. Issues are answered in this repo on a best-effort basis.
+This project is developed and maintained by the GreatSQL sigs community and is open source, following the [Apache 2.0](LICENSE) license.
 
-This operator is developed and maintained by the GreatSQL sigs community and is open source.
-
-## Description
+## Project Description
 GreatSQL Operator is a tool for deploying and managing GreatSQL database clusters on Kubernetes. It provides the following core features:
 
 - Automated deployment and management of GreatSQL single instances and clusters (MGR)
@@ -22,61 +20,50 @@ GreatSQL Operator is a tool for deploying and managing GreatSQL database cluster
 - Resource usage optimization
 - Rolling upgrade support
 
-This project is developed based on the Kubernetes Operator pattern and allows you to manage GreatSQL databases just like native Kubernetes resources.
+This project is developed based on the `Kubebuilder` framework, allowing you to manage GreatSQL databases like native Kubernetes resources.
+
+## Compatibility List
+
+| Component                | Version          | Status | Notes       |
+|--------------------------|------------------|--------|-------------|
+| Kubernetes               | 1.22+            | ✅     | Recommended version <=1.29 |
+| OpenShift                | 4.8+             | ✅     |             |
+| GreatSQL                 | 8.0.25-26        | ✅     | Recommended version |
+| GreatSQL                 | 8.0.25-25        | ✅     |             |
 
 ## Installation
-For detailed deployment instructions, please refer to the [Deployment Guide](docs/deployment_guide.md).
+For detailed deployment instructions, please refer to the [Deployment Guide](docs/manual_zh.md).
 
-## Project Distribution
-
-Following are the steps to build the installer and distribute this project to users.
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:tag
-```
-
-NOTE: The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without
-its dependencies.
-
-2. Using the installer
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql/main/dist/install.yaml
-```
-
-## Contributing
-Please see our [Contributing Guidelines](./CONTRIBUTING.md) for details on how to contribute to this project.
+## Contribution Guide
+Please see our [Contribution Guide](./CONTRIBUTING_zh.md) for details on how to contribute to this project.
 
 ## Roadmap
- - [ ] webhooks validation
- - [ ] Multi-master and cluster
+ - [ ] Webhook validation
+ - [ ] Multi-master cluster
  - [ ] Proxy SQL integration
  - [ ] Logical backup
- - [ ] Physical backups 
+ - [ ] Physical backups
  - [ ] [Prometheus](https://github.com/prometheus/prometheus) metrics exporter
 
 ## Version Notes
-### v1.0.1 (current version)
+
+### v1.0.1 (Current Version)
 - Initial release version
 - Core features:
-- Support GreatSQL single instance deployment
-- Support GreatSQL MGR cluster deployment
-- Developed based on Kubebuilder v4 framework
-- Support automatic failover
-- Support rolling upgrade
-- Support resource usage optimization
+  - Support for GreatSQL single instance deployment
+  - Support for GreatSQL MGR cluster deployment
+  - Developed based on Kubebuilder v4 framework
+  - Support for automatic failover
+  - Support for rolling upgrades
+  - Support for resource usage optimization
 
-### Known issues
-- Webhook verification function is not yet completed
+### Known Issues
+- Webhook validation function is not yet completed
 - Backup function is still under development
-- Prometheus indicator exporter is not yet implemented
+- Prometheus metrics exporter is not yet implemented
 
-### Subsequent plans
-Please refer to the [Roadmap](#Roadmap) section for future version plans.
+### Subsequent Plans
+Please refer to the [Roadmap](#roadmap) section for future version plans.
 
 ## License
 
@@ -91,6 +78,5 @@ You may obtain a copy of the License at
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+See the License for the specific language governing permissions and limitations under the License.
 
