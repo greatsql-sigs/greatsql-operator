@@ -21,14 +21,23 @@ GreatSQL Operator 是一个用于在 Kubernetes 上部署和管理 GreatSQL 数�
 
 本项目基于 `Kubebuilder` 框架开发，允许您像管理原生 Kubernetes 资源一样管理 GreatSQL 数据库。
 
+## 兼容性列表
+
+| 组件                     | 版本             | 状态 | 备注       |
+|--------------------------|------------------|------|------------|
+| Kubernetes               | 1.22+           | ✅   |  推荐版本1.29<= |
+| OpenShift                | 4.8+            | ✅   |            |
+| GreatSQL                 | 8.0.25-26       | ✅    | 推荐版本   |
+| GreatSQL                 | 8.0.25-25       | ✅    |            |
+
 ## 安装
-有关详细的部署说明，请参阅[部署指南](docs/deployment_guide_zh.md)。
+有关详细的部署说明，请参阅[部署指南](docs/manual_zh.md)。
 
 ## 贡献指南
 请查看我们的[贡献指南](./CONTRIBUTING_zh.md)了解如何为该项目做出贡献。
 
 ## 路线图
- - [ ] webhooks验证
+ - [ ] webhook验证
  - [ ] 多主集群
  - [ ] Proxy SQL 集成
  - [ ] 逻辑备份
