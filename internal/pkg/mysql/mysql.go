@@ -3,6 +3,7 @@ package mysql
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -143,10 +144,46 @@ func (m *MySQL) IsMGRClusterExist() (bool, error) {
 }
 
 // GrantPrivileges grant privileges
-// Only grant BACKUP_ADMIN, REPLICATION SLAVE permission
 func (m *MySQL) GrantPrivileges(username string) error {
-	sql := "GRANT BACKUP_ADMIN, REPLICATION SLAVE ON *.* TO ?@'%';"
-	return m.query(sql, username)
+
+	globalPrivileges := []string{
+		"RELOAD", "SHUTDOWN", "PROCESS", "FILE", "SELECT", "SUPER",
+		"REPLICATION SLAVE", "REPLICATION CLIENT", "REPLICATION_APPLIER",
+		"CREATE USER", "SYSTEM_VARIABLES_ADMIN", "PERSIST_RO_VARIABLES_ADMIN",
+		"BACKUP_ADMIN", "CLONE_ADMIN", "EXECUTE",
+	}
+
+	schemaPrivileges := map[string][]string{
+		"mysql_innodb_cluster_metadata.*": {
+			"ALTER", "ALTER ROUTINE", "CREATE", "CREATE ROUTINE", "CREATE TEMPORARY TABLES",
+			"CREATE VIEW", "DELETE", "DROP", "EVENT", "EXECUTE", "INDEX", "INSERT", "LOCK TABLES",
+			"REFERENCES", "SHOW VIEW", "TRIGGER", "UPDATE",
+		},
+		"mysql_innodb_cluster_metadata_bkp.*": {
+			"ALTER", "ALTER ROUTINE", "CREATE", "CREATE ROUTINE", "CREATE TEMPORARY TABLES",
+			"CREATE VIEW", "DELETE", "DROP", "EVENT", "EXECUTE", "INDEX", "INSERT", "LOCK TABLES",
+			"REFERENCES", "SHOW VIEW", "TRIGGER", "UPDATE",
+		},
+		"mysql_innodb_cluster_metadata_previous.*": {
+			"ALTER", "ALTER ROUTINE", "CREATE", "CREATE ROUTINE", "CREATE TEMPORARY TABLES",
+			"CREATE VIEW", "DELETE", "DROP", "EVENT", "EXECUTE", "INDEX", "INSERT", "LOCK TABLES",
+			"REFERENCES", "SHOW VIEW", "TRIGGER", "UPDATE",
+		},
+		"mysql.*": {"INSERT", "UPDATE", "DELETE"},
+	}
+
+	globalSQL := "GRANT " + strings.Join(globalPrivileges, ", ") + " ON *.* TO ?@'%';"
+	if err := m.query(globalSQL, username); err != nil {
+		return err
+	}
+
+	for schema, privileges := range schemaPrivileges {
+		schemaSQL := "GRANT " + strings.Join(privileges, ", ") + " ON " + schema + " TO ?@'%';"
+		if err := m.query(schemaSQL, username); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetReplicationChannel set replication channel
