@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -184,7 +185,10 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	cnf.ReportPort = 3306
 	cnf.InnodbBufferPoolSize = mysql.CalculateInnodbBufferPoolSize(memoryReq)
 
-	// Check if the current member is an arbitrator and its size is 1
+	// 判断当前节点是否为仲裁节点
+	// 条件: 1. 节点角色为仲裁者(Arbitrator)
+	//      2. Size 字段不为空
+	//      3. Size 值为 1
 	if mgr.Spec.Member[ordinal].Role == greatsqlv1.ArbitratorRole && mgr.Spec.Member[ordinal].Size != nil && *mgr.Spec.Member[ordinal].Size == 1 {
 		cnf.GroupReplicationArbitrator = "ON"
 	} else {
@@ -259,7 +263,6 @@ func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, r
 
 // initializeCluster initializes the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
-
 	mysql := mysql.MySQL{
 		Host:     fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", mgr.Name, ordinal, mgr.Name, mgr.Namespace),
 		Port:     consts.MySQLPort,
@@ -270,47 +273,67 @@ func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.Gr
 
 	clusterExist, err := mysql.IsMGRClusterExist()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check cluster existence: %w", err)
 	}
 
-	if clusterExist {
-		r.EventRecorder.Event(mgr, "Normal", "ClusterExist", "Cluster already exists")
-		return nil
-	}
-
-	r.EventRecorder.Event(mgr, "Normal", "ClusterNotExist", "Cluster does not exist, initializing...")
-
-	if err := mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword); err != nil {
-		return err
-	}
-
-	if err := mysql.GrantPrivileges(consts.ReplicationChannelUser); err != nil {
-		return err
-	}
-
-	// Only one node should bootstrap the cluster, e.g., the node with ordinal 0
-	if ordinal == 0 {
-		// Set replication channel for the bootstrap node
-		if err := mysql.SetReplicationChannel(consts.ReplicationChannelUser, consts.ReplicationChannelPassword); err != nil {
-			return err
+	if !clusterExist {
+		if ordinal != 0 {
+			return fmt.Errorf("only the first node (ordinal=0) can bootstrap the cluster")
 		}
+		return r.bootstrapPrimaryNode(mgr, &mysql)
+	}
 
-		// Bootstrap the first node
-		if err := mysql.SetBootstrapNode(); err != nil {
-			return err
-		}
+	return r.joinSecondaryNode(mgr, ordinal, &mysql)
+}
 
-		if err := mysql.StartGroupReplication(); err != nil {
-			return err
-		}
-	} else {
-		// For other nodes, wait for the bootstrap node to start replication
-		// Then start Group Replication for the remaining nodes
-		if err := mysql.StartGroupReplication(); err != nil {
-			return err
+func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *greatsqlv1.GroupReplicationCluster, mysql *mysql.MySQL) error {
+	r.Log.Info("Bootstrapping primary node...")
+	r.EventRecorder.Event(mgr, "Normal", "Bootstrap", "Bootstrapping the cluster with the first node")
+
+	steps := []struct {
+		name string
+		fn   func() error
+	}{
+		{"create replication user", func() error {
+			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+		}},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
+		{"set bootstrap node", mysql.SetBootstrapNode},
+		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
+		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 300) }},
+		{"reset bootstrap flag", func() error { return kube.Retry(mysql.ResetBootstrapFlag, 3, 10*time.Second) }},
+	}
+
+	for _, step := range steps {
+		if err := step.fn(); err != nil {
+			return fmt.Errorf("failed to %s: %w", step.name, err)
 		}
 	}
 
+	r.Log.Info("Cluster successfully bootstrapped with the first node")
+	return nil
+}
+
+func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *greatsqlv1.GroupReplicationCluster, ordinal int, mysql *mysql.MySQL) error {
+	r.Log.Info("Adding new node as secondary", "Node", ordinal)
+
+	primaryHost := fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace)
+	steps := []struct {
+		name string
+		fn   func() error
+	}{
+		{"wait for primary", func() error { return mysql.WaitForPrimaryAvailable(primaryHost, 300) }},
+		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
+		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},
+	}
+
+	for _, step := range steps {
+		if err := step.fn(); err != nil {
+			return fmt.Errorf("failed to %s for node %d: %w", step.name, ordinal, err)
+		}
+	}
+
+	r.Log.Info("Node successfully joined the cluster as a secondary node", "Node", ordinal)
 	return nil
 }
 

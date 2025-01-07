@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -211,4 +212,60 @@ func (m *MySQL) SetBootstrapNode() error {
 
 	sql = "START GROUP_REPLICATION;"
 	return m.query(sql)
+}
+
+// WaitForMemberState waits for the current member to reach the desired state
+func (m *MySQL) WaitForMemberState(desiredState string, timeoutSeconds int) error {
+	for i := 0; i < timeoutSeconds; i++ {
+		state, err := m.getMemberState()
+		if err != nil {
+			return err
+		}
+		if state == desiredState {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("timeout waiting for member state %s", desiredState)
+}
+
+// getMemberState gets the current member state in group replication
+func (m *MySQL) getMemberState() (string, error) {
+	query := `SELECT MEMBER_STATE FROM performance_schema.replication_group_members 
+			  WHERE MEMBER_HOST = @@hostname`
+	var state string
+	err := m.queryRow(query).Scan(&state)
+	return state, err
+}
+
+// ResetBootstrapFlag resets the bootstrap flag after successful primary start
+func (m *MySQL) ResetBootstrapFlag() error {
+	return m.query("SET GLOBAL group_replication_bootstrap_group = OFF")
+}
+
+// WaitForPrimaryAvailable waits for the primary node to be accessible
+func (m *MySQL) WaitForPrimaryAvailable(primaryHost string, timeoutSeconds int) error {
+	for i := 0; i < timeoutSeconds; i++ {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
+			m.UserName, m.Password, primaryHost, m.DB))
+		if err == nil {
+			if err = db.Ping(); err == nil {
+				db.Close()
+				return nil
+			}
+			db.Close()
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("timeout waiting for primary node to be available")
+}
+
+// queryRow executes a query that returns a single row
+func (m *MySQL) queryRow(query string, args ...interface{}) *sql.Row {
+	db, err := m.NewClient(m.UserName, m.Password, m.Host, m.DB, m.Port)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+	return db.QueryRow(query, args...)
 }

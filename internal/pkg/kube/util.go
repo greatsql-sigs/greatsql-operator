@@ -2,6 +2,7 @@ package kube
 
 import (
 	"fmt"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 )
@@ -45,4 +46,15 @@ func getName(obj interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// Retry 重试函数
+func Retry(step func() error, retries int, delay time.Duration) error {
+	for i := 0; i < retries; i++ {
+		if err := step(); err == nil {
+			return nil
+		}
+		time.Sleep(delay)
+	}
+	return fmt.Errorf("step failed after %d retries", retries)
 }
