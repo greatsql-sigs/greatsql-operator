@@ -31,7 +31,8 @@ RUN make build
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 # registry.cn-chengdu.aliyuncs.com/gcr-distroless/static China mirror of distroless image.
 # FROM gcr.io/distroless/static:nonroot
-FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
+# FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
+FROM registry.cn-beijing.aliyuncs.com/greatsql/static:nonroot
 WORKDIR /
 COPY --from=builder /app/greatsql-controller-manager .
 USER 65532:65532
