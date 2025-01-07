@@ -125,5 +125,24 @@ func (r *GroupReplicationCluster) validateCommon() error {
 		}
 	}
 
+	if err := r.validateArbitratorSize(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *GroupReplicationCluster) validateArbitratorSize() error {
+	arbitratorCount := 0
+	for _, member := range r.Spec.Member {
+		if member.Role == ArbitratorRole {
+			if member.Size != nil {
+				arbitratorCount += int(*member.Size)
+			}
+		}
+	}
+	if arbitratorCount > 1 {
+		return errors.New("only one arbitrator is allowed")
+	}
 	return nil
 }

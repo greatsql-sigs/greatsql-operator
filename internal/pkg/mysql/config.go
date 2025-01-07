@@ -26,6 +26,7 @@ type MySQLConfig struct {
 	GroupReplicationGroupSeeds   string // TODO: 这个参数可能是一个字符串数组，暂时先用字符串表示，后续待验证，列为todo
 	ReportHost                   string
 	ReportPort                   int
+	GroupReplicationArbitrator   string
 	InnodbBufferPoolSize         string
 }
 
@@ -38,6 +39,7 @@ func (c *MySQLConfig) String(cnf MySQLConfig) (string, error) {
 	c.GroupReplicationGroupSeeds = cnf.GroupReplicationGroupSeeds
 	c.ReportHost = cnf.ReportHost
 	c.ReportPort = cnf.ReportPort
+	c.GroupReplicationArbitrator = cnf.GroupReplicationArbitrator
 	c.InnodbBufferPoolSize = cnf.InnodbBufferPoolSize
 
 	tmpl, err := template.ParseFS(tmplFS, "tmpl/my.cnf.tmpl")

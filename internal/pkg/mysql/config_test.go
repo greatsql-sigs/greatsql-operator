@@ -16,9 +16,11 @@ func TestConfig(t *testing.T) {
 
 	// string
 	cnfStr := new(MySQLConfig)
+	cnfStr.EnableCluster = true
 	cnfStr.ServerID = "0"
 	cnfStr.GroupReplicationGroupName = "greatsql"
 	cnfStr.GroupReplicationGroupSeeds = "1.1.1.1:3306"
+	cnfStr.GroupReplicationLocalAddress = "1.1.1.1:3306,1.1.1.2:3306,1.1.1.3:3306"
 	cnfStr.ReportHost = "1.1.1.1"
 	cnfStr.ReportPort = 3306
 	cnfStr.InnodbBufferPoolSize = "1G"

@@ -160,8 +160,8 @@ func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, re
 // createConfigMap creates a ConfigMap for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
-	existingConfigMap := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, existingConfigMap)
+	exists := &corev1.ConfigMap{}
+	err := r.Client.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, exists)
 	if err == nil {
 		r.Log.Info("ConfigMap already exists", "Name", configMapName)
 		return nil
@@ -183,6 +183,14 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	cnf.ReportHost = fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace)
 	cnf.ReportPort = 3306
 	cnf.InnodbBufferPoolSize = mysql.CalculateInnodbBufferPoolSize(memoryReq)
+
+	// Check if the current member is an arbitrator and its size is 1
+	if mgr.Spec.Member[ordinal].Role == greatsqlv1.ArbitratorRole && mgr.Spec.Member[ordinal].Size != nil && *mgr.Spec.Member[ordinal].Size == 1 {
+		cnf.GroupReplicationArbitrator = "ON"
+	} else {
+		cnf.GroupReplicationArbitrator = "OFF"
+	}
+
 	data, err := cnf.String(*cnf)
 	if err != nil {
 		r.Log.Error(err, "Could not get configMap data")
