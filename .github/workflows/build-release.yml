@@ -19,13 +19,6 @@ on:
         default: false
         type: boolean
 
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
 jobs:
   build:
     name: Build and Push Docker
