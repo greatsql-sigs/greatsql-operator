@@ -4,6 +4,5 @@
 .vscode/
 .idea/
 bin/
-hack/
 examples/
 scripts/

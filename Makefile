@@ -1,6 +1,12 @@
+# git
+VERSION    = $(shell git describe --tags --always)
+GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+#GIT_COMMIT = $(shell git rev-parse --short=7 HEAD)
+GIT_COMMIT = $(shell git rev-parse HEAD)
+BUILD_TIME = $(shell date +"%Y-%m-%d %H:%M:%S")
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= registry.cn-chengdu.aliyuncs.com/greatsql-sigs/greatsql-operator:$(VERSION)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.29.0
 
@@ -21,13 +27,6 @@ CONTAINER_TOOL ?= docker
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
-
-# git
-VERSION    = $(shell git describe --tags --always)
-GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
-#GIT_COMMIT = $(shell git rev-parse --short=7 HEAD)
-GIT_COMMIT = $(shell git rev-parse HEAD)
-BUILD_TIME = $(shell date +"%Y-%m-%d %H:%M:%S")
 
 define ldflags
 "-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.Version=${VERSION}' \
@@ -95,8 +94,8 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -ldflags ${ldflags} -o bin/manager cmd/main.go
-	go build -ldflags ${ldflags} -o bin/cli cmd/cli/main.go
+	go build -ldflags ${ldflags} -o greatsql-controller-manager cmd/main.go
+	go build -ldflags ${ldflags} -o gcm-cli cmd/cli/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -119,7 +118,7 @@ docker-push: ## Push docker image with the manager.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+PLATFORMS ?= linux/arm64,linux/amd64
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
