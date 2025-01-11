@@ -65,7 +65,7 @@ spec:
       containers:
       - args:
         - --leader-elect
-        image: registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
+        image: registry.cn-chengdu.aliyuncs.com/greatsql-sigs/greatsql-operator:1.0.1-alpha-1
         name: greatsql-controller-manager
         securityContext:
           allowPrivilegeEscalation: false
