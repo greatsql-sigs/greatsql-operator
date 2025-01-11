@@ -1,10 +1,14 @@
 package kube
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 /**
@@ -46,6 +50,26 @@ func getName(obj interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// getPodByLabels 根据标签获取 Pod
+func getPodByLabels(cli client.Reader, labelSelector string) ([]corev1.Pod, error) {
+	sel, err := labels.Parse(labelSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	podList := &corev1.PodList{}
+	opts := &client.ListOptions{
+		LabelSelector: sel,
+		// Namespace:     namespace,
+	}
+	err = cli.List(context.Background(), podList, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return podList.Items, nil
 }
 
 // Retry 重试函数
