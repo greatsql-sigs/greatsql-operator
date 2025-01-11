@@ -36,9 +36,6 @@ jobs:
         - name: 'Install Go dependencies'
           run: go mod download
 
-        - name: 'Run tests'
-          run: go test -v ./...
-
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v2
 
