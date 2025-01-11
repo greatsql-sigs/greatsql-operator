@@ -3,6 +3,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/issues)
 [![GitHub license](https://img.shields.io/github/license/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/blob/main/LICENSE)
+[简体中文](./README_zh.md)
 
 GreatSQL Operator provides robust and reliable support for GreatSQL on Kubernetes. It manages all the resources needed for deploying and managing highly available GreatSQL clusters. It also offers easy backup functionality while maintaining high availability of the cluster.
 
