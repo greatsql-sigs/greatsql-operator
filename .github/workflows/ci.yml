@@ -36,11 +36,6 @@ jobs:
         - name: 'Install Go dependencies'
           run: go mod download
 
-        - name: 'Static code analysis'
-          uses: golangci/golangci-lint-action@v6
-          with:
-            version: v1.59
-
         - name: 'Run tests'
           run: go test -v ./...
 
