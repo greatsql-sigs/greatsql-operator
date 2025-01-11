@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -51,11 +50,10 @@ func (m *Member) GetSize() int32 {
 // GroupReplicationClusterStatus defines the observed state of GroupReplicationCluster
 type GroupReplicationClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	AccessPoint              string `json:"accessPoint,omitempty"`
-	Size                     int32  `json:"size,omitempty"`
-	Ready                    int32  `json:"ready,omitempty"`
-	Age                      string `json:"age,omitempty"`
-	appsv1.StatefulSetStatus `json:",inline"`
+	State State  `json:"state,omitempty"`
+	Size  int32  `json:"size,omitempty"`
+	Ready int32  `json:"ready,omitempty"`
+	Age   string `json:"age,omitempty"`
 }
 
 //+kubebuilder:object:root=true

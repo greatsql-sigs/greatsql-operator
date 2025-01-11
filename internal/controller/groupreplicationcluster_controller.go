@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,12 +30,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
-	"github.com/gagraler/greatsql-operator/internal/consts"
-	"github.com/gagraler/greatsql-operator/internal/pkg/kube"
-	"github.com/gagraler/greatsql-operator/internal/pkg/mysql"
-	"github.com/gagraler/greatsql-operator/internal/utils"
 	"github.com/go-logr/logr"
+	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
+	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
 )
 
 // GroupReplicationClusterReconciler reconciles a GroupReplicationCluster object
@@ -55,31 +56,25 @@ type GroupReplicationClusterReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the GroupReplicationCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	log := logger.WithValues("GroupReplicationCluster", req.NamespacedName)
-	log.Info("Reconciling GroupReplicationCluster...")
+	r.Log.Info("Reconciling GroupReplicationCluster...")
 
 	mgr := &greatsqlv1.GroupReplicationCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, mgr); err != nil {
 		if errors.IsNotFound(err) {
-			log.Error(err, "GroupReplicationCluster resource not found. Ignoring since object must be deleted")
+			r.Log.Error(err, "GroupReplicationCluster resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "unable to fetch GroupReplicationCluster")
+		r.Log.Error(err, "unable to fetch GroupReplicationCluster")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	sts := &appsv1.StatefulSet{}
 	if err := r.Client.Get(ctx, req.NamespacedName, sts); err != nil {
-		if err := r.createResources(ctx, req, mgr, log); err != nil {
+		if err := r.createResources(ctx, req, mgr); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -88,51 +83,93 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 }
 
 // createResources creates the resources for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, log logr.Logger) error {
-	if err := r.createSecret(ctx, req, mgr, log); err != nil {
+func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+	// Create common resources first
+	if err := r.createSecret(ctx, req, mgr); err != nil {
 		return err
 	}
 
+	if err := r.createService(ctx, req, mgr); err != nil {
+		return err
+	}
+
+	// Create resources for each member
 	size := mgr.Spec.Member[0].GetSize()
-	for ordinal := 1; ordinal <= int(size); ordinal++ {
-		if err := r.createConfigMap(ctx, req, mgr, log, ordinal); err != nil {
+	for ordinal := 0; ordinal < int(size); ordinal++ { // Changed from 1 to 0 to include first node
+		// Create ConfigMap for each member
+		if err := r.createConfigMap(ctx, req, mgr, ordinal); err != nil {
 			return err
 		}
 
-		if err := r.createPersistentVolumeClaim(ctx, req, mgr, log, ordinal); err != nil {
+		// Create PVC for each member
+		if err := r.createPersistentVolumeClaim(ctx, req, mgr, ordinal); err != nil {
 			return err
 		}
 
-		if err := r.createStatefulSet(ctx, req, mgr, log, ordinal); err != nil {
+		// Create StatefulSet for each member
+		if err := r.createStatefulSet(ctx, req, mgr, ordinal); err != nil {
 			return err
 		}
 	}
 
-	return r.createService(ctx, req, mgr, log)
+	// Wait for pods to be ready before initializing cluster
+	if err := r.waitForPodsReady(ctx, req); err != nil {
+		return err
+	}
+
+	// Initialize cluster after all pods are ready
+	for ordinal := 0; ordinal < int(size); ordinal++ {
+		if err := r.initializeCluster(mgr, ordinal); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// waitForPodsReady waits for all pods to be ready
+func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context, req ctrl.Request) error {
+	labels := map[string]string{
+		consts.AppKubernetesName:     req.Name,
+		consts.AppKubernetesInstance: req.Name,
+	}
+
+	pods, err := kube.PodsByLabels(ctx, r.Client, labels, req.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get pods: %v", err)
+	}
+
+	for _, pod := range pods {
+		if !kube.IsPodReady(&pod) {
+			return fmt.Errorf("pod %s is not ready", pod.Name)
+		}
+	}
+
+	return nil
 }
 
 // createSecret creates a Secret for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, log logr.Logger) error {
+func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
 	secret := kube.NewSecretEnv(req.Name+"-secret", req.Namespace, mgr.Spec.ClusterSpec.PodSpec.Containers[0].Envs)
 	if err := r.Client.Create(ctx, secret); err != nil {
-		log.Error(err, "Could not create secret")
+		r.Log.Error(err, "Could not create secret")
 		return err
 	}
 	return nil
 }
 
 // createConfigMap creates a ConfigMap for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, log logr.Logger, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
-	existingConfigMap := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, existingConfigMap)
+	exists := &corev1.ConfigMap{}
+	err := r.Client.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, exists)
 	if err == nil {
-		log.Info("ConfigMap already exists", "Name", configMapName)
+		r.Log.Info("ConfigMap already exists", "Name", configMapName)
 		return nil
 	}
 
 	if !errors.IsNotFound(err) {
-		log.Error(err, "Unable to fetch ConfigMap")
+		r.Log.Error(err, "Unable to fetch ConfigMap")
 		return err
 	}
 
@@ -147,35 +184,46 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	cnf.ReportHost = fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace)
 	cnf.ReportPort = 3306
 	cnf.InnodbBufferPoolSize = mysql.CalculateInnodbBufferPoolSize(memoryReq)
+
+	// 判断当前节点是否为仲裁节点
+	// 条件: 1. 节点角色为仲裁者(Arbitrator)
+	//      2. Size 字段不为空
+	//      3. Size 值为 1
+	if mgr.Spec.Member[ordinal].Role == greatsqlv1.ArbitratorRole && mgr.Spec.Member[ordinal].Size != nil && *mgr.Spec.Member[ordinal].Size == 1 {
+		cnf.GroupReplicationArbitrator = "ON"
+	} else {
+		cnf.GroupReplicationArbitrator = "OFF"
+	}
+
 	data, err := cnf.String(*cnf)
 	if err != nil {
-		log.Error(err, "Could not get configMap data")
+		r.Log.Error(err, "Could not get configMap data")
 		return err
 	}
 
 	configMap := kube.NewConfigMap(configMapName, req.Namespace, "my.cnf", data)
 	if err := r.Client.Create(ctx, configMap); err != nil {
-		log.Error(err, "Could not create configMap", "Name", configMapName)
+		r.Log.Error(err, "Could not create configMap", "Name", configMapName)
 		return err
 	}
-	log.Info("ConfigMap created successfully", "Name", configMapName, "Namespace", configMap.Namespace)
+	r.Log.Info("ConfigMap created successfully", "Name", configMapName, "Namespace", configMap.Namespace)
 	return nil
 }
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, log logr.Logger, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
 	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, mgr.Spec.ClusterSpec.PodSpec)
 	pvc.Name = fmt.Sprintf("%s-%s-%d", req.Name, consts.DB, ordinal)
 	if err := r.Client.Create(ctx, pvc); err != nil {
-		log.Error(err, "Could not create persistentVolumeClaim")
+		r.Log.Error(err, "Could not create persistentVolumeClaim")
 		return err
 	}
-	log.Info("Create persistentVolumeClaim is successful", "Name", pvc.Name, "Namespace", pvc.Namespace)
+	r.Log.Info("Create persistentVolumeClaim is successful", "Name", pvc.Name, "Namespace", pvc.Namespace)
 	return nil
 }
 
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, log logr.Logger, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
 	sts := kube.NewStatefulSet(configMapName, fmt.Sprintf("%s-headless", req.Name), mgr, ordinal)
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
@@ -188,56 +236,104 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 			ContainerPort: consts.MgrAdminPort,
 			Protocol:      corev1.ProtocolTCP,
 		}, corev1.ContainerPort{
-			Name:          consts.MysqlPortName,
-			ContainerPort: consts.MysqlPort,
+			Name:          consts.MySQLPortName,
+			ContainerPort: consts.MySQLPort,
 			Protocol:      corev1.ProtocolTCP,
 		})
 	if err := r.Client.Create(ctx, sts); err != nil {
-		log.Error(err, "Could not create statefulSet")
+		r.Log.Error(err, "Could not create statefulSet")
 		return err
 	}
-	log.Info("Create statefulSet is successful", "Name", sts.Name, "Namespace", sts.Namespace)
+	r.Log.Info("Create statefulSet is successful", "Name", sts.Name, "Namespace", sts.Namespace)
 	return nil
 }
 
 // createService creates a Service for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, log logr.Logger) error {
-	service := kube.NewService(req.Name, req.Namespace, consts.GroupReplicationCluster, &mgr.ObjectMeta, mgr.Spec.ClusterSpec.Ports, mgr.Spec.ClusterSpec.Type)
+func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+	service := kube.NewService(req.Name, req.Namespace, mgr.Spec.ClusterSpec.ServiceExpose)
 	service.Name = fmt.Sprintf("%s-headless", req.Name)
 	service.Spec.ClusterIP = corev1.ClusterIPNone
 	if err := r.Client.Create(ctx, service); err != nil {
-		log.Error(err, "Could not create service")
+		r.Log.Error(err, "Could not create service")
 		return err
 	}
-	log.Info("Create service is successful", "Name", service.Name, "Namespace", service.Namespace)
+	r.Log.Info("Create service is successful", "Name", service.Name, "Namespace", service.Namespace)
 	return nil
 }
 
 // initializeCluster initializes the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.GroupReplicationCluster) error {
-
+func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
 	mysql := mysql.MySQL{
-		Host:     fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Namespace, mgr.Namespace),
-		Port:     consts.MysqlPort,
+		Host:     fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", mgr.Name, ordinal, mgr.Name, mgr.Namespace),
+		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
 		Password: consts.MySQLRootPassWord,
 		DB:       consts.MySQLDB,
 	}
-	// create repl user
-	if err := mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword); err != nil {
-		return err
+
+	clusterExist, err := mysql.IsMGRClusterExist()
+	if err != nil {
+		return fmt.Errorf("failed to check cluster existence: %w", err)
 	}
 
-	// grant repl user
-	if err := mysql.GrantPrivileges(consts.ReplicationChannelUser); err != nil {
-		return err
+	if !clusterExist {
+		if ordinal != 0 {
+			return fmt.Errorf("only the first node (ordinal=0) can bootstrap the cluster")
+		}
+		return r.bootstrapPrimaryNode(mgr, &mysql)
 	}
 
-	// set bootstrap member
-	if err := mysql.SetBootstrapMember(); err != nil {
-		return err
+	return r.joinSecondaryNode(mgr, ordinal, &mysql)
+}
+
+func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *greatsqlv1.GroupReplicationCluster, mysql *mysql.MySQL) error {
+	r.Log.Info("Bootstrapping primary node...")
+	r.EventRecorder.Event(mgr, "Normal", "Bootstrap", "Bootstrapping the cluster with the first node")
+
+	steps := []struct {
+		name string
+		fn   func() error
+	}{
+		{"create replication user", func() error {
+			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+		}},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
+		{"set bootstrap node", mysql.SetBootstrapNode},
+		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
+		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 300) }},
+		{"reset bootstrap flag", func() error { return kube.Retry(mysql.ResetBootstrapFlag, 3, 10*time.Second) }},
 	}
 
+	for _, step := range steps {
+		if err := step.fn(); err != nil {
+			return fmt.Errorf("failed to %s: %w", step.name, err)
+		}
+	}
+
+	r.Log.Info("Cluster successfully bootstrapped with the first node")
+	return nil
+}
+
+func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *greatsqlv1.GroupReplicationCluster, ordinal int, mysql *mysql.MySQL) error {
+	r.Log.Info("Adding new node as secondary", "Node", ordinal)
+
+	primaryHost := fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace)
+	steps := []struct {
+		name string
+		fn   func() error
+	}{
+		{"wait for primary", func() error { return mysql.WaitForPrimaryAvailable(primaryHost, 300) }},
+		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
+		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},
+	}
+
+	for _, step := range steps {
+		if err := step.fn(); err != nil {
+			return fmt.Errorf("failed to %s for node %d: %w", step.name, ordinal, err)
+		}
+	}
+
+	r.Log.Info("Node successfully joined the cluster as a secondary node", "Node", ordinal)
 	return nil
 }
 
@@ -245,6 +341,5 @@ func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.Gr
 func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&greatsqlv1.GroupReplicationCluster{}).
-		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }

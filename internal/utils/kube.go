@@ -17,6 +17,22 @@ import (
  * @description: kubernetes util
  */
 
+// SetPodAffinity sets the pod affinity for the given labels
+func SetPodAffinity(labels map[string]string) *corev1.Affinity {
+	return &corev1.Affinity{
+		PodAffinity: &corev1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: labels,
+					},
+					TopologyKey: corev1.LabelHostname,
+				},
+			},
+		},
+	}
+}
+
 // GetServiceAccessPoint returns the access point for a given service
 func GetServiceAccessPoint(svc corev1.Service) string {
 	var accessPoint string

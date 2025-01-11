@@ -1,10 +1,11 @@
 package kube
 
 import (
+	"fmt"
 	"strconv"
 
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
-	"github.com/gagraler/greatsql-operator/internal/consts"
+	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,13 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 	}
 	affinity := cr.PodAffinity(labels)
 
+	replicas := int32(0)
+	for _, member := range cr.Spec.Member {
+		if member.Size != nil {
+			replicas += *member.Size
+		}
+	}
+
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -44,19 +52,17 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 			Labels: labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:    cr.Spec.Member[0].Size,
+			Replicas: &replicas,
+			//Replicas:    cr.Spec.Member[0].Size,
 			ServiceName: serviceName,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						consts.AppKubernetesName: cr.Name,
-					},
+					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					// InitContainers:                NewInitContainers(cr.Name, cr.Spec.ClusterSpec.PodSpec, cr.Spec.ClusterSpec.Ports),
 					Containers:                    NewContainers(cr.Name, cr.Spec.ClusterSpec.PodSpec, ordinal, true),
 					TerminationGracePeriodSeconds: cr.Spec.ClusterSpec.PodSpec.TerminationGracePeriodSeconds,
 					SchedulerName:                 cr.Spec.ClusterSpec.PodSpec.SchedulerName,
@@ -67,7 +73,7 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 					Tolerations:                   cr.Spec.ClusterSpec.PodSpec.Tolerations,
 					Volumes: []corev1.Volume{
 						{
-							Name: cr.Name + consts.Config,
+							Name: fmt.Sprintf("%s-%s", cr.Name, consts.Config),
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
@@ -86,7 +92,7 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 							// },
 						},
 					},
-					DNSPolicy: cr.Spec.ClusterSpec.DnsPolicy,
+					DNSPolicy: cr.Spec.ClusterSpec.PodSpec.DnsPolicy,
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -106,7 +112,6 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 			},
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: cr.Spec.ClusterSpec.UpdateStrategy.Type,
-				// Type: appsv1.RollingUpdateStatefulSetStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
 					Partition:      cr.Spec.ClusterSpec.UpdateStrategy.RolelingUpdate.Partition,
 					MaxUnavailable: cr.Spec.ClusterSpec.UpdateStrategy.RolelingUpdate.MaxUnavailable,

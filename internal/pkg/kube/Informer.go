@@ -1,8 +1,9 @@
 package kube
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -21,6 +22,7 @@ import (
 type EventHandlerFunc struct {
 	UpdateFunc func(oldObj, newObj interface{})
 	// DeleteFunc func(obj interface{})
+	Log logr.Logger
 }
 
 // informerUpdate Informer更新
@@ -36,60 +38,39 @@ func informerUpdate[T any](informerFunc func() cache.SharedIndexInformer,
 	return informer
 }
 
-// informerDelete Informer删除
-// func informerDelete[T any](informerFunc func() cache.SharedIndexInformer,
-// 	eventHandlers EventHandlerFunc) cache.SharedIndexInformer {
-
-// 	informer := informerFunc()
-// 	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-// 		DeleteFunc: eventHandlers.DeleteFunc,
-// 	}); err != nil {
-// 		panic(err)
-// 	}
-// 	return informer
-// }
-
 // PodInformer Pod Informer
-func PodInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+func (e *EventHandlerFunc) PodInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
 	return informerUpdate[corev1.Pod](factory.Core().V1().Pods().Informer, EventHandlerFunc{
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldPod := oldObj.(*corev1.Pod)
 			newPod := newObj.(*corev1.Pod)
 			if oldPod.Status.ContainerStatuses[0].RestartCount != newPod.Status.ContainerStatuses[0].RestartCount {
-				fmt.Printf("Pod %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.ContainerStatuses[0].RestartCount)
+				e.Log.Info("Pod %s has been restarted. Restart count: %d", newPod.Name, newPod.Status.ContainerStatuses[0].RestartCount)
 			}
 		},
 	})
 }
 
 // DeploymentInformer Deployment Informer
-func DeploymentInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+func (e *EventHandlerFunc) DeploymentInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
 	return informerUpdate[appsv1.Deployment](factory.Apps().V1().Deployments().Informer, EventHandlerFunc{
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldDeploy := oldObj.(*appsv1.Deployment)
-			newDeploy := newObj.(*appsv1.Deployment)
-			if oldDeploy.Status.Replicas != newDeploy.Status.Replicas {
-				fmt.Printf("Deployment %s has been updated. Replicas: %d\n", newDeploy.Name, newDeploy.Status.Replicas)
-			}
+			handleReplicaChange[appsv1.Deployment](oldObj, newObj, "Deployment")
 		},
 	})
 }
 
 // StatefulSetInformer StatefulSet Informer
-func StatefulSetInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+func (e *EventHandlerFunc) StatefulSetInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
 	return informerUpdate[appsv1.StatefulSet](factory.Apps().V1().StatefulSets().Informer, EventHandlerFunc{
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldSts := oldObj.(*appsv1.StatefulSet)
-			newSts := newObj.(*appsv1.StatefulSet)
-			if oldSts.Status.Replicas != newSts.Status.Replicas {
-				fmt.Printf("StatefulSet %s has been updated. Replicas: %d\n", newSts.Name, newSts.Status.Replicas)
-			}
+			handleReplicaChange[appsv1.StatefulSet](oldObj, newObj, "StatefulSet")
 		},
 	})
 }
 
 // SecretInformer Secret Informer
-func SecretInformer(factory informers.SharedInformerFactory, onUpdate func(oldSecret, newSecret *corev1.Secret)) cache.SharedIndexInformer {
+func (e *EventHandlerFunc) SecretInformer(factory informers.SharedInformerFactory, onUpdate func(oldSecret, newSecret *corev1.Secret)) (cache.SharedIndexInformer, error) {
 	return informerUpdate[corev1.Secret](factory.Core().V1().Secrets().Informer, EventHandlerFunc{
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldSecret := oldObj.(*corev1.Secret)
@@ -97,37 +78,65 @@ func SecretInformer(factory informers.SharedInformerFactory, onUpdate func(oldSe
 
 			oldKey, err := cache.MetaNamespaceKeyFunc(oldSecret)
 			if err != nil {
-				fmt.Printf("Error getting key for old secret: %v\n", err)
+				errors.Wrapf(err, "error getting key for old secret")
 				return
 			}
 			newKey, err := cache.MetaNamespaceKeyFunc(newSecret)
 			if err != nil {
-				fmt.Printf("Error getting key for new secret: %v\n", err)
+				errors.Wrapf(err, "error getting key for new secret")
 				return
 			}
 
 			if oldKey != newKey {
-				fmt.Printf("Secret key has been changed from %s to %s\n", oldKey, newKey)
+				e.Log.Info("Secret key has been changed from %s to %s", oldKey, newKey)
 			}
 
 			if oldSecret.ResourceVersion != newSecret.ResourceVersion {
 				onUpdate(oldSecret, newSecret)
-				fmt.Printf("Secret %s has been updated. ResourceVersion: %s\n", newSecret.Name, newSecret.ResourceVersion)
+				e.Log.Info("Secret %s has been updated. ResourceVersion: %s", newSecret.Name, newSecret.ResourceVersion)
 			}
 		},
-	})
+	}), nil
 }
 
 // PersistentVolumeClaimInformer PersistentVolumeClaim Informer
-func PersistentVolumeClaimInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+func (e *EventHandlerFunc) PersistentVolumeClaimInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
 	return informerUpdate[corev1.PersistentVolumeClaim](factory.Core().V1().PersistentVolumeClaims().Informer, EventHandlerFunc{
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldPVC := oldObj.(*corev1.PersistentVolumeClaim)
 			newPVC := newObj.(*corev1.PersistentVolumeClaim)
 
 			if oldPVC.Status.Phase != newPVC.Status.Phase {
-				fmt.Printf("PVC %s has been updated. Phase: %s\n", newPVC.Name, newPVC.Status.Phase)
+				e.Log.Info("PVC %s has been updated. Phase: %s", newPVC.Name, newPVC.Status.Phase)
 			}
 		},
 	})
 }
+
+// SingleInstanceInformer SingleInstance Informer
+// Custom Resource Definition Informer
+// func SingleInstanceInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+// 	return informerUpdate[v1.SingleInstance](factory.Core().V1().Pods().Informer, EventHandlerFunc{
+// 		UpdateFunc: func(oldObj, newObj interface{}) {
+// 			oldPod := oldObj.(*v1.SingleInstance)
+// 			newPod := newObj.(*v1.SingleInstance)
+// 			if oldPod.Status.Replicas != newPod.Status.Replicas {
+// 				fmt.Printf("Instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
+// 			}
+// 		},
+// 	})
+// }
+
+// GroupReplicationClusterInformer GroupReplicationCluster Informer
+// Custom Resource Definition Informer
+// func GroupReplicationClusterInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+// 	return informerUpdate[v1.GroupReplicationCluster](factory.Core().V1().Pods().Informer, EventHandlerFunc{
+// 		UpdateFunc: func(oldObj, newObj interface{}) {
+// 			oldPod := oldObj.(*v1.GroupReplicationCluster)
+// 			newPod := newObj.(*v1.GroupReplicationCluster)
+// 			if oldPod.Status.Replicas != newPod.Status.Replicas {
+// 				fmt.Printf("Cluster instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
+// 			}
+// 		},
+// 	})
+// }

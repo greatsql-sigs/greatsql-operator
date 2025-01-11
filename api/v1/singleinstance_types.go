@@ -18,7 +18,6 @@ package v1
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -33,14 +32,11 @@ import (
 type SingleInstanceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 
-	// //+kubebuilder:validation:Enum=Sinlge;GroupReplicationCluster
 	// Category   GreatSqlType                  `json:"category,omitempty"`
 	// Role           MemberRole                    `json:"role,omitempty"`
-	Size           *int32                        `json:"size,omitempty"`
-	PodSpec        PodSpec                       `json:"podSpec,omitempty"`
-	Ports          []corev1.ServicePort          `json:"ports,omitempty"`
-	Type           corev1.ServiceType            `json:"type,omitempty"`
-	DnsPolicy      corev1.DNSPolicy              `json:"dnsPolicy,omitempty"`
+	Size           *int32  `json:"size,omitempty"`
+	PodSpec        PodSpec `json:"podSpec,omitempty"`
+	ServiceExpose  `json:",omitempty"`
 	UpgradeOptions UpgradeOptions                `json:"upgradeOptions,omitempty"`
 	UpdateStrategy appsv1.DeploymentStrategyType `json:"updateStrategy,omitempty"`
 }
@@ -57,16 +53,15 @@ func (s *SingleInstanceSpec) GetSize() int32 {
 type SingleInstanceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	AccessPoint             string `json:"accessPoint,omitempty"`
-	Size                    int32  `json:"size,omitempty"`
-	Ready                   int32  `json:"ready,omitempty"`
-	Age                     string `json:"age,omitempty"`
-	appsv1.DeploymentStatus `json:",inline"`
+	State State  `json:"state,omitempty"`
+	Size  int32  `json:"size,omitempty"`
+	Ready int32  `json:"ready,omitempty"`
+	Age   string `json:"age,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="AccessPoint",type="string",JSONPath=".status.accessPoint",description="The access point of the SingleInstance"
+//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state",description="The access point of the SingleInstance"
 //+kubebuilder:printcolumn:name="Size",type="integer",JSONPath=".spec.size",description="The size of the SingleInstance"
 //+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The ready of the SingleInstance"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the SingleInstance"

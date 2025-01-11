@@ -16,8 +16,8 @@ spec:
   versions:
   - additionalPrinterColumns:
     - description: The access point of the SingleInstance
-      jsonPath: .status.accessPoint
-      name: AccessPoint
+      jsonPath: .status.state
+      name: State
       type: string
     - description: The size of the SingleInstance
       jsonPath: .spec.size
@@ -56,8 +56,15 @@ spec:
           spec:
             description: SingleInstance defines the desired state of SingleInstance
             properties:
-              dnsPolicy:
-                description: DNSPolicy defines how a pod's DNS will be configured.
+              annotations:
+                additionalProperties:
+                  type: string
+                type: object
+              labels:
+                additionalProperties:
+                  type: string
+                type: object
+              loadBalancerClass:
                 type: string
               podSpec:
                 description: PodSpec defines the desired state of Pod
@@ -78,7 +85,7 @@ spec:
                       description: ContainerSpec defines the desired state of the
                         container
                       properties:
-                        envs:
+                        env:
                           items:
                             description: EnvVar represents an environment variable
                               present in a Container.
@@ -365,6 +372,8 @@ spec:
                               format: int32
                               type: integer
                           type: object
+                        name:
+                          type: string
                         readinessProbe:
                           description: |-
                             Probe describes a health check to be performed against a container to determine whether it is
@@ -900,8 +909,12 @@ spec:
                           type: object
                       required:
                       - image
+                      - name
                       type: object
                     type: array
+                  dnsPolicy:
+                    description: DNSPolicy defines how a pod's DNS will be configured.
+                    type: string
                   labels:
                     additionalProperties:
                       type: string
@@ -1407,9 +1420,12 @@ spec:
                   - port
                   type: object
                 type: array
+              selector:
+                additionalProperties:
+                  type: string
+                type: object
               size:
                 description: |-
-                  //+kubebuilder:validation:Enum=Sinlge;GroupReplicationCluster
                   Category   GreatSqlType                  `json:"category,omitempty"`
                   Role           MemberRole                    `json:"role,omitempty"`
                 format: int32
@@ -1431,91 +1447,19 @@ spec:
           status:
             description: SingleInstanceStatus defines the observed state of SingleInstance
             properties:
-              accessPoint:
-                description: |-
-                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
-                type: string
               age:
                 type: string
-              availableReplicas:
-                description: Total number of available pods (ready for at least minReadySeconds)
-                  targeted by this deployment.
-                format: int32
-                type: integer
-              collisionCount:
-                description: |-
-                  Count of hash collisions for the Deployment. The Deployment controller uses this
-                  field as a collision avoidance mechanism when it needs to create the name for the
-                  newest ReplicaSet.
-                format: int32
-                type: integer
-              conditions:
-                description: Represents the latest available observations of a deployment's
-                  current state.
-                items:
-                  description: DeploymentCondition describes the state of a deployment
-                    at a certain point.
-                  properties:
-                    lastTransitionTime:
-                      description: Last time the condition transitioned from one status
-                        to another.
-                      format: date-time
-                      type: string
-                    lastUpdateTime:
-                      description: The last time this condition was updated.
-                      format: date-time
-                      type: string
-                    message:
-                      description: A human readable message indicating details about
-                        the transition.
-                      type: string
-                    reason:
-                      description: The reason for the condition's last transition.
-                      type: string
-                    status:
-                      description: Status of the condition, one of True, False, Unknown.
-                      type: string
-                    type:
-                      description: Type of deployment condition.
-                      type: string
-                  required:
-                  - status
-                  - type
-                  type: object
-                type: array
-              observedGeneration:
-                description: The generation observed by the deployment controller.
-                format: int64
-                type: integer
               ready:
-                format: int32
-                type: integer
-              readyReplicas:
-                description: readyReplicas is the number of pods targeted by this
-                  Deployment with a Ready Condition.
-                format: int32
-                type: integer
-              replicas:
-                description: Total number of non-terminated pods targeted by this
-                  deployment (their labels match the selector).
                 format: int32
                 type: integer
               size:
                 format: int32
                 type: integer
-              unavailableReplicas:
+              state:
                 description: |-
-                  Total number of unavailable pods targeted by this deployment. This is the total number of
-                  pods that are still required for the deployment to have 100% available capacity. They may
-                  either be pods that are running but not yet available or pods that still have not been created.
-                format: int32
-                type: integer
-              updatedReplicas:
-                description: Total number of non-terminated pods targeted by this
-                  deployment that have the desired template spec.
-                format: int32
-                type: integer
+                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
+                type: string
             type: object
         type: object
     served: true

@@ -1,8 +1,10 @@
 package kube
 
 import (
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
-	"github.com/gagraler/greatsql-operator/internal/consts"
+	"fmt"
+
+	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,7 +69,7 @@ func NewDeployment(configMapName string, cr *greatsqlv1.SingleInstance, ordinal 
 					Tolerations:                   cr.Spec.PodSpec.Tolerations,
 					Volumes: []corev1.Volume{
 						{
-							Name: cr.Name + consts.Config,
+							Name: fmt.Sprintf("%s-%s", cr.Name, consts.Config),
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
@@ -78,15 +80,15 @@ func NewDeployment(configMapName string, cr *greatsqlv1.SingleInstance, ordinal 
 							},
 						},
 						{
-							Name: cr.Name + consts.DB,
+							Name: fmt.Sprintf("%s-%s", cr.Name, consts.DB),
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: cr.Name + consts.DB,
+									ClaimName: fmt.Sprintf("%s-%s", cr.Name, consts.DB),
 								},
 							},
 						},
 					},
-					DNSPolicy: cr.Spec.DnsPolicy,
+					DNSPolicy: cr.Spec.PodSpec.DnsPolicy,
 				},
 			},
 			Selector: selector,

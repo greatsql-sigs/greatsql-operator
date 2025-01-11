@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
+	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 

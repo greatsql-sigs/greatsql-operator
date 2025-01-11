@@ -30,14 +30,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/bytedance/sonic"
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
-	"github.com/gagraler/greatsql-operator/internal/consts"
-	"github.com/gagraler/greatsql-operator/internal/pkg/kube"
-	"github.com/gagraler/greatsql-operator/internal/pkg/mysql"
-	"github.com/gagraler/greatsql-operator/internal/utils"
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/types"
+	apiv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
+	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
 )
 
 // SingleInstanceReconciler reconciles a SingleInstance object
@@ -46,11 +44,8 @@ type SingleInstanceReconciler struct {
 	Scheme        *runtime.Scheme
 	Log           logr.Logger
 	EventRecorder record.EventRecorder
+	Resource      *kube.ResourceOperation
 }
-
-var (
-	logger = ctrl.Log.WithName("greatsql-controller-manager")
-)
 
 //+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances/status,verbs=get;update;patch
@@ -69,51 +64,75 @@ var (
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.Log.Info("Reconciling GreatSQL Single Instance...")
 
-	r.Log = logger.WithValues("Request.Service.Namespace", req.Namespace, "Request.Service.Name", req.Name)
-	r.Log.Info("Reconciling SingleInstance GreatSql...")
-
-	SingleInstance := &greatsqlv1.SingleInstance{}
-	if err := r.getSingleInstance(ctx, req, SingleInstance, r.Log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if err := r.handleFinalizer(ctx, SingleInstance, r.Log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if err := r.validateAndAddFinalizer(SingleInstance, req, r.Log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if err := r.createResources(ctx, req, SingleInstance, r.Log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	return r.watchResource(ctx, req, SingleInstance)
-}
-
-// getSingleInstance gets the SingleInstance
-func (r *SingleInstanceReconciler) getSingleInstance(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	err := r.Client.Get(ctx, req.NamespacedName, SingleInstance)
-	if err != nil {
+	// Get the SingleInstance resource
+	cr := &apiv1.SingleInstance{}
+	if err := r.Client.Get(ctx, req.NamespacedName, cr); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("SingleGreateSql resource not found. Ignoring since object must be deleted")
-			return nil
+			r.Log.Info("SingleInstance resource not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
 		}
-		r.Log.Error(err, "unable to fetch SingleGreateSql")
-		return client.IgnoreNotFound(err)
+		r.Log.Error(err, "Failed to get SingleInstance")
+		return ctrl.Result{}, err
 	}
-	return nil
+
+	// Initialize resource operation helper
+	r.Resource = kube.NewResourceOperation(r.Log, r.Client)
+
+	// Handle finalizer
+	if err := r.handleFinalizer(ctx, cr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// 只在首次创建 CR 时创建资源
+	if cr.Status.State == "" {
+		if err := r.createRequiredResources(ctx, req, cr); err != nil {
+			r.Log.Error(err, "Failed to create resources")
+			return ctrl.Result{}, err
+		}
+
+		// 更新 CR Status，让下次 Reconcile 知道已经创建过资源
+		cr.Status.State = apiv1.StateInitializing
+		if updateErr := r.Client.Status().Update(ctx, cr); updateErr != nil {
+			r.Log.Error(updateErr, "Failed to update CR status after creation")
+			return ctrl.Result{}, updateErr
+		}
+
+		// 此处不再立刻 Requeue, 返回空的 ctrl.Result，等待下一次触发(如 Deployment 状态变更、用户手动修改 CR、或 CRDs 事件)
+		return ctrl.Result{}, nil
+	}
+
+	// Check if deployment exists
+	deployGreatsql := &appsv1.Deployment{}
+	if err := r.Client.Get(ctx, req.NamespacedName, deployGreatsql); err != nil {
+		if !errors.IsNotFound(err) {
+			r.Log.Error(err, "Failed to get Deployment")
+			return ctrl.Result{}, err
+		}
+		if _, err := r.computeStatus(ctx, cr); err != nil {
+			r.Log.Error(err, "Failed to update status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Update status
+	if _, err := r.computeStatus(ctx, cr); err != nil {
+		r.Log.Error(err, "Failed to update status")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // handleFinalizer handles the finalizer of the SingleInstance
-func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
+func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, cr *apiv1.SingleInstance) error {
 	finalizer := &utils.GreatSqlFinalizer{
 		Cli:      r.Client,
-		GreatSql: SingleInstance,
+		GreatSql: cr,
 	}
-	if SingleInstance.DeletionTimestamp != nil {
+	if cr.DeletionTimestamp != nil {
 		if err := finalizer.HandleFinalizer(); err != nil {
 			r.Log.Error(err, "Could not handle finalizer")
 			return err
@@ -122,8 +141,7 @@ func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleIn
 			r.Log.Error(err, "Could not remove finalizer")
 			return err
 		}
-		if err := r.Client.Update(ctx, SingleInstance); err != nil {
-			r.Log.Error(err, "Could not update GreatSql")
+		if err := r.Resource.UpdateResource(ctx, cr, cr.Name, cr.Namespace, consts.SingleInstance); err != nil {
 			return err
 		}
 		return nil
@@ -131,45 +149,8 @@ func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, SingleIn
 	return nil
 }
 
-// validateAndAddFinalizer validates the spec of the SingleInstance and adds the finalizer
-func (r *SingleInstanceReconciler) validateAndAddFinalizer(SingleInstance *greatsqlv1.SingleInstance, req ctrl.Request, log logr.Logger) error {
-	if err := r.validateSpec(SingleInstance.Spec, req); err != nil {
-		r.Log.Error(err, "invalid spec, please check")
-		return err
-	}
-	finalizer := &utils.GreatSqlFinalizer{
-		Cli:      r.Client,
-		GreatSql: SingleInstance,
-	}
-	if err := finalizer.AddFinalizer(); err != nil {
-		r.Log.Error(err, "Could not add finalizer")
-		return err
-	}
-	return nil
-}
-
-// createResources creates the resources
-func (r *SingleInstanceReconciler) createResources(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	deployGreatsql := &appsv1.Deployment{}
-	if err := r.Client.Get(ctx, req.NamespacedName, deployGreatsql); err != nil {
-		if err := r.createConfigMap(ctx, req, log); err != nil {
-			return err
-		}
-		if err := r.createPersistentVolumeClaim(ctx, req, SingleInstance, log); err != nil {
-			return err
-		}
-		if err := r.createDeployment(ctx, req, SingleInstance, log); err != nil {
-			return err
-		}
-		if err := r.createService(ctx, req, SingleInstance, log); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // createConfigMap creates a ConfigMap for the SingleInstance
-func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl.Request, log logr.Logger) error {
+func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl.Request) error {
 	cnf := &mysql.MySQLConfig{
 		ServerID:                   "0",
 		EnableCluster:              false,
@@ -185,226 +166,141 @@ func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl
 		return err
 	}
 	configMap := kube.NewConfigMap(req.Name+"-config", req.Namespace, "my.cnf", data)
-	if err := r.Client.Create(ctx, configMap); err != nil {
-		r.Log.Error(err, "Could not create configMap")
-		return err
-	}
-	r.Log.Info("Create configMap is successful", "Name", configMap.Name, "Namespace", configMap.Namespace)
-	return nil
+
+	return r.Resource.CreateResource(ctx, configMap, req.Name, req.Namespace, "ConfigMap")
 }
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for the SingleInstance
-func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, &SingleInstance.Spec.PodSpec)
-	if err := r.Client.Create(ctx, pvc); err != nil {
-		r.Log.Error(err, "Could not create persistentVolumeClaim")
-		return err
-	}
-	r.Log.Info("Create persistentVolumeClaim is successful", "Name", pvc.Name, "Namespace", pvc.Namespace)
-	return nil
+func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, &cr.Spec.PodSpec)
+	return r.Resource.CreateResource(ctx, pvc, req.Name, req.Namespace, "PersistentVolumeClaim")
 }
 
 // createDeployment creates a Deployment for the SingleInstance
-func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	deploy := kube.NewDeployment(req.Name+consts.Config, SingleInstance, int(*SingleInstance.Spec.Size))
-	if err := r.Client.Create(ctx, deploy); err != nil {
-		r.Log.Error(err, "Could not create deployment")
-		return err
-	}
-	r.Log.Info("Create deployment is successful", "Name", deploy.Name, "Namespace", deploy.Namespace)
-	return nil
+func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+	configMapName := fmt.Sprintf("%s-%s", req.Name, consts.Config)
+	deploy := kube.NewDeployment(configMapName, cr, int(*cr.Spec.Size))
+	return r.Resource.CreateResource(ctx, deploy, req.Name, req.Namespace, "Deployment")
 }
 
 // createService creates a Service for the SingleInstance
-func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	service := kube.NewService(req.Name, req.Namespace, consts.SingleInstance, &SingleInstance.ObjectMeta, SingleInstance.Spec.Ports, SingleInstance.Spec.Type)
-	if err := r.Client.Create(ctx, service); err != nil {
-		r.Log.Error(err, "Could not create service")
-		return err
-	}
-	log.Info("Create service is successful", "Name", service.Name, "Namespace", service.Namespace)
-	if err := r.updateStatus(ctx, SingleInstance, *service); err != nil {
-		r.Log.Error(err, "Could not update status")
-		return err
-	}
-	return nil
+func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+	service := kube.NewService(req.Name, req.Namespace, cr.Spec.ServiceExpose)
+
+	return r.Resource.CreateResource(ctx, service, req.Name, req.Namespace, "Service")
 }
 
-// validateSpec validates the spec of the SingleInstance
-func (r *SingleInstanceReconciler) validateSpec(spec greatsqlv1.SingleInstanceSpec, req ctrl.Request) error {
-	// log := logger.WithValues("Request.Service.Namespace", req.Namespace, "Request.Service.Name", req.Name)
+// computeStatus updates the status of the SingleInstance
+func (r *SingleInstanceReconciler) computeStatus(ctx context.Context, cr *apiv1.SingleInstance) (*apiv1.SingleInstanceStatus, error) {
+	r.Log.Info("Computing status")
 
-	// validate role and type
-
-	// validate size
-	if spec.Size == nil || *spec.Size == 0 {
-		r.Log.Error(nil, "size is required")
-		r.EventRecorder.Event(&greatsqlv1.SingleInstance{}, corev1.EventTypeWarning, "InvalidSpec", "size is required")
-		return errors.NewBadRequest("size is required")
+	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
+		return nil, nil
 	}
 
-	// validate podSpec
-	if spec.PodSpec.PersistentVolumeClaimTemplate.StorageClassName == nil {
-		r.Log.Error(nil, "storageClassName is required")
-		r.EventRecorder.Event(&greatsqlv1.SingleInstance{}, corev1.EventTypeWarning, "InvalidSpec", "storageClassName cannot be empty")
-		return errors.NewBadRequest("storageClassName is required")
+	result := &apiv1.SingleInstanceStatus{
+		State: apiv1.StateInitializing,
 	}
 
-	return nil
-}
-
-// watchResource watches the resource
-func (r *SingleInstanceReconciler) watchResource(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance) (ctrl.Result, error) {
-	log := logger.WithValues("Request.Service.Namespace", req.Namespace, "Request.Service.Name", req.Name)
-
-	// Update spec annotation
-	if err := r.updateSpecAnnotation(ctx, SingleInstance, log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Update Deployment
-	if err := r.updateDeployment(ctx, req, SingleInstance, log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Update Service
-	if err := r.updateService(ctx, req, SingleInstance, log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Update ConfigMap
-	if err := r.updateConfigMap(ctx, req, log); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
-}
-
-// updateSpecAnnotation updates the spec annotation
-func (r *SingleInstanceReconciler) updateSpecAnnotation(ctx context.Context, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	data, err := sonic.Marshal(SingleInstance.Spec)
+	deployList := &appsv1.DeploymentList{}
+	err := r.Client.List(ctx, deployList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
 	if err != nil {
-		r.Log.Error(err, "Could not marshal spec")
-		return err
+		return nil, err
 	}
 
-	if SingleInstance.Annotations == nil {
-		SingleInstance.Annotations = make(map[string]string)
+	switch len(deployList.Items) {
+	case 0:
+		result.State = apiv1.StatePaused
+		r.Log.Info("no deployment found")
+	case 1:
+		status := deployList.Items[0].Status
+		result.Ready = status.ReadyReplicas
+		r.Log.Info("got deployment status", "status", status)
+		result.State = determineState(status.ReadyReplicas)
+	default:
+		r.Log.Info("too many deployments found", "count", len(deployList.Items))
+		result.State = apiv1.StateError
+		return result, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
 	}
-	SingleInstance.Annotations["spec"] = string(data)
 
-	if err := r.Client.Update(ctx, SingleInstance); err != nil {
-		r.Log.Error(err, "Could not update GreatSql")
-		return err
-	}
-
-	return nil
-}
-
-// updateResource updates the resource
-func (r *SingleInstanceReconciler) updateResource(ctx context.Context, namespacedName types.NamespacedName, obj client.Object) error {
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Client.Get(ctx, namespacedName, existing)
-	existing.SetAnnotations(obj.GetAnnotations())
-	existing.SetLabels(obj.GetLabels())
-	existing.SetOwnerReferences(obj.GetOwnerReferences())
-	existing.SetFinalizers(obj.GetFinalizers())
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if err := r.Client.Create(ctx, obj); err != nil {
-				return fmt.Errorf("could not create resource: %v", err)
-			}
-		} else {
-			return fmt.Errorf("could not get resource: %v", err)
-		}
-	} else {
-		obj.SetResourceVersion(existing.GetResourceVersion())
-		if err := r.Client.Update(ctx, obj); err != nil {
-			return fmt.Errorf("could not update resource: %v", err)
+	if !reflect.DeepEqual(cr.Status, *result) {
+		cr.Status = *result
+		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("GreatSQL status updated: %s", result.State))
+		if err := r.Client.Status().Update(ctx, cr); err != nil {
+			r.Log.Error(err, "Could not update status")
+			return result, err
 		}
 	}
 
-	return r.Client.Update(ctx, existing)
+	r.Log.Info("Status updated", "status", result)
+
+	return result, nil
 }
 
-// updateDeployment updates the deployment
-func (r *SingleInstanceReconciler) updateDeployment(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	newDeployments := kube.NewDeployment(req.Name+consts.Config, SingleInstance, int(*SingleInstance.Spec.Size))
-	if err := r.updateResource(ctx, req.NamespacedName, newDeployments); err != nil {
-		r.Log.Error(err, "Could not update deployment")
-		return err
+// determineState helps decide the state based on ready replicas
+func determineState(readyReplicas int32) apiv1.State {
+	if readyReplicas == 1 {
+		return apiv1.StateReady
 	}
-	return nil
-}
-
-// updateService updates the service
-func (r *SingleInstanceReconciler) updateService(ctx context.Context, req ctrl.Request, SingleInstance *greatsqlv1.SingleInstance, log logr.Logger) error {
-	newResources := kube.NewService(req.Name, req.Namespace, consts.SingleInstance, &SingleInstance.ObjectMeta, SingleInstance.Spec.Ports, SingleInstance.Spec.Type)
-	if err := r.updateResource(ctx, req.NamespacedName, newResources); err != nil {
-		r.Log.Error(err, "Could not update service")
-		return err
-	}
-	return nil
-}
-
-// updateConfigMap updates the configMap
-func (r *SingleInstanceReconciler) updateConfigMap(ctx context.Context, req ctrl.Request, log logr.Logger) error {
-	cnf := &mysql.MySQLConfig{
-		ServerID:                   "0",
-		EnableCluster:              false,
-		GroupReplicationGroupName:  "greatsql",
-		GroupReplicationGroupSeeds: "",
-		ReportHost:                 "",
-		ReportPort:                 3306,
-		InnodbBufferPoolSize:       "1G",
-	}
-	cnfData, err := cnf.String(*cnf)
-	if err != nil {
-		r.Log.Error(err, "Could not get configMap data")
-		return err
-	}
-
-	newConfigMap := kube.NewConfigMap(req.Name+"-config", req.Namespace, "my.cnf", cnfData)
-	if err := r.updateResource(ctx, types.NamespacedName{Namespace: req.Namespace, Name: req.Name + "-config"}, newConfigMap); err != nil {
-		r.Log.Error(err, "Could not update configMap")
-		return err
-	}
-	return nil
-}
-
-// updateStatus updates the status of the SingleInstance
-func (r *SingleInstanceReconciler) updateStatus(ctx context.Context, singleGreatsql *greatsqlv1.SingleInstance, svc corev1.Service) error {
-	// log := logger.WithValues("Request.Service.Namespace", singleGreatsql.Namespace, "Request.Service.Name", singleGreatsql.Name)
-
-	accessPoint := utils.GetServiceAccessPoint(svc)
-
-	status := &greatsqlv1.SingleInstanceStatus{
-		AccessPoint: accessPoint,
-		Size:        *singleGreatsql.Spec.Size,
-		Ready:       0,
-		Age:         svc.CreationTimestamp.String(),
-	}
-
-	if reflect.DeepEqual(singleGreatsql.Status, status) {
-		return nil
-	}
-
-	singleGreatsql.Status = *status
-
-	// update status
-	if err := r.Client.Status().Update(ctx, singleGreatsql); err != nil {
-		r.Log.Error(err, "Could not update status")
-		return err
-	}
-
-	return nil
+	return apiv1.StateInitializing
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SingleInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&greatsqlv1.SingleInstance{}).
+		For(&apiv1.SingleInstance{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
+}
+
+func (r *SingleInstanceReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+	// Create ConfigMap
+	if exists, err := r.Resource.ResourceExists(ctx, req.Name+"-config", req.Namespace, &corev1.ConfigMap{}); err != nil {
+		return err
+	} else if !exists {
+		if err := r.createConfigMap(ctx, req); err != nil {
+			r.Log.Error(err, "Failed to create ConfigMap")
+			r.EventRecorder.Event(cr, "Warning", "CreateFailed", "Failed to create ConfigMap")
+			return err
+		}
+		r.EventRecorder.Event(cr, "Normal", "Created", "Successfully created ConfigMap")
+	}
+
+	// Create PVC
+	if exists, err := r.Resource.ResourceExists(ctx, req.Name, req.Namespace, &corev1.PersistentVolumeClaim{}); err != nil {
+		return err
+	} else if !exists {
+		if err := r.createPersistentVolumeClaim(ctx, req, cr); err != nil {
+			r.Log.Error(err, "Failed to create PVC")
+			r.EventRecorder.Event(cr, "Warning", "CreateFailed", "Failed to create PVC")
+			return err
+		}
+		r.EventRecorder.Event(cr, "Normal", "Created", "Successfully created PVC")
+	}
+
+	// Create Deployment
+	if exists, err := r.Resource.ResourceExists(ctx, req.Name, req.Namespace, &appsv1.Deployment{}); err != nil {
+		return err
+	} else if !exists {
+		if err := r.createDeployment(ctx, req, cr); err != nil {
+			r.Log.Error(err, "Failed to create Deployment")
+			r.EventRecorder.Event(cr, "Warning", "CreateFailed", "Failed to create Deployment")
+			return err
+		}
+		r.EventRecorder.Event(cr, "Normal", "Created", "Successfully created Deployment")
+	}
+
+	// Create Service
+	if exists, err := r.Resource.ResourceExists(ctx, req.Name, req.Namespace, &corev1.Service{}); err != nil {
+		return err
+	} else if !exists {
+		if err := r.createService(ctx, req, cr); err != nil {
+			r.Log.Error(err, "Failed to create Service")
+			r.EventRecorder.Event(cr, "Warning", "CreateFailed", "Failed to create Service")
+			return err
+		}
+		r.EventRecorder.Event(cr, "Normal", "Created", "Successfully created Service")
+	}
+
+	return nil
 }

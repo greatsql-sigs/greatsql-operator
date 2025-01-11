@@ -1,121 +1,70 @@
 # greatsql-operator
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+[![GitHub stars](https://img.shields.io/github/stars/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/issues)
+[![GitHub license](https://img.shields.io/github/license/greatsql-sigs/greatsql-operator)](https://github.com/greatsql-sigs/greatsql-operator/blob/main/LICENSE)
+[简体中文](./README_zh.md)
 
-## Getting Started
-1. 
-```sh
-git clone https://github.com/gagraler/greatsql-operator
+GreatSQL Operator provides robust and reliable support for GreatSQL on Kubernetes. It manages all the resources needed for deploying and managing highly available GreatSQL clusters. It also offers easy backup functionality while maintaining high availability of the cluster.
 
-cd greatsql-operator
+🍺 🍕 ☕ If this operator has helped your project, please consider sponsoring to accelerate development. Issues in this repository will be addressed on a best-effort basis.
 
-# install crds
-kubectl apply -f config/crd/bases/*.yaml
+This project is developed and maintained by the GreatSQL sigs community and is open source, following the [Apache 2.0](LICENSE) license.
 
-# install and run operaotr
-kubectl apply -f 
+## Project Description
+GreatSQL Operator is a tool for deploying and managing GreatSQL database clusters on Kubernetes. It provides the following core features:
 
-# install greatsql-operator/single instance
-kubectl apply -f example/ns/ns.yaml
-kubectl apply -f example/single/singleinstance.yaml
+- Automated deployment and management of GreatSQL single instances and clusters (MGR)
+- Automatic failover and self-healing capabilities
+- Backup and recovery management
+- Monitoring integration
+- Resource usage optimization
+- Rolling upgrade support
 
-# install greatsql-operator/group replication cluster (mgr)
-kubectl apply -f example/ns/ns.yaml
-kubectl apply -f example/cluster/groupreplicationcluster.yaml
-```
+This project is developed based on the `Kubebuilder` framework, allowing you to manage GreatSQL databases like native Kubernetes resources.
 
+## Compatibility List
 
-### Prerequisites
-- go version v1.21.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.22.0=+ cluster.
+| Component                | Version          | Status | Notes       |
+|--------------------------|------------------|--------|-------------|
+| Kubernetes               | 1.22+            | ✅     | Recommended version <=1.29 |
+| OpenShift                | 4.8+             | ✅     |             |
+| GreatSQL                 | 8.0.25-26        | ✅     | Recommended version |
+| GreatSQL                 | 8.0.25-25        | ✅     |             |
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+## Installation
+For detailed deployment instructions, please refer to the [Deployment Guide](docs/manual_zh.md).
 
-```sh
-make docker-build docker-push IMG=registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:tag
-```
+## Contribution Guide
+Please see our [Contribution Guide](./CONTRIBUTING_zh.md) for details on how to contribute to this project.
 
-**NOTE:** This image ought to be published in the personal registry you specified. 
-And it is required to have access to pull the image from the working environment. 
-Make sure you have the proper permission to the registry if the above commands don’t work.
+## Roadmap
+ - [ ] Webhook validation
+ - [ ] Multi-master cluster
+ - [ ] Proxy SQL integration
+ - [ ] Logical backup
+ - [ ] Physical backups
+ - [ ] [Prometheus](https://github.com/prometheus/prometheus) metrics exporter
 
-**Install the CRDs into the cluster:**
+## Version Notes
 
-```sh
-make install
-```
+### v1.0.1 (Current Version)
+- Initial release version
+- Core features:
+  - Support for GreatSQL single instance deployment
+  - Support for GreatSQL MGR cluster deployment
+  - Developed based on Kubebuilder v4 framework
+  - Support for automatic failover
+  - Support for rolling upgrades
+  - Support for resource usage optimization
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+### Known Issues
+- Webhook validation function is not yet completed
+- Backup function is still under development
+- Prometheus metrics exporter is not yet implemented
 
-```sh
-make deploy IMG=registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:tag
-```
-
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin 
-privileges or be logged in as admin.
-
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
-
-```sh
-kubectl apply -k config/samples/
-```
-
->**NOTE**: Ensure that the samples has default values to test it out.
-
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
-
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following are the steps to build the installer and distribute this project to users.
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator:tag
-```
-
-NOTE: The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without
-its dependencies.
-
-2. Using the installer
-
-Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/gagraler/greatsql/main/dist/install.yaml
-```
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+### Subsequent Plans
+Please refer to the [Roadmap](#roadmap) section for future version plans.
 
 ## License
 
@@ -130,6 +79,5 @@ You may obtain a copy of the License at
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+See the License for the specific language governing permissions and limitations under the License.
 

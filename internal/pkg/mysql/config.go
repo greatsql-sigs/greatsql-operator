@@ -26,6 +26,7 @@ type MySQLConfig struct {
 	GroupReplicationGroupSeeds   string // TODO: 这个参数可能是一个字符串数组，暂时先用字符串表示，后续待验证，列为todo
 	ReportHost                   string
 	ReportPort                   int
+	GroupReplicationArbitrator   string
 	InnodbBufferPoolSize         string
 }
 
@@ -38,10 +39,9 @@ func (c *MySQLConfig) String(cnf MySQLConfig) (string, error) {
 	c.GroupReplicationGroupSeeds = cnf.GroupReplicationGroupSeeds
 	c.ReportHost = cnf.ReportHost
 	c.ReportPort = cnf.ReportPort
+	c.GroupReplicationArbitrator = cnf.GroupReplicationArbitrator
 	c.InnodbBufferPoolSize = cnf.InnodbBufferPoolSize
 
-	// 输出执行路径
-	// fmt.Println(os.Getwd())
 	tmpl, err := template.ParseFS(tmplFS, "tmpl/my.cnf.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %v", err)

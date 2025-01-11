@@ -1,5 +1,6 @@
 # Build the manager binary
-FROM golang:1.21 AS builder
+# registry.cn-beijing.aliyuncs.com/greatsql/golang:1.23
+FROM golang:1.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -13,7 +14,7 @@ ENV GOPROXY=https://goproxy.cn
 RUN go mod download
 
 # Copy the go source
-COPY cmd/main.go cmd/main.go
+COPY cmd/* cmd/*
 COPY api/ api/
 COPY internal/ internal/
 COPY Makefile Makefile
@@ -30,9 +31,10 @@ RUN make build
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 # registry.cn-chengdu.aliyuncs.com/gcr-distroless/static China mirror of distroless image.
 # FROM gcr.io/distroless/static:nonroot
-FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
+# FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
+FROM registry.cn-beijing.aliyuncs.com/greatsql/static:nonroot
 WORKDIR /
-COPY --from=builder /app/greatsql-operator .
+COPY --from=builder /app/greatsql-controller-manager .
 USER 65532:65532
 
-ENTRYPOINT ["/greatsql-operator"]
+ENTRYPOINT ["/greatsql-controller-manager"]

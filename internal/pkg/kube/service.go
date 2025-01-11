@@ -1,11 +1,10 @@
 package kube
 
 import (
-	"github.com/gagraler/greatsql-operator/internal/consts"
-	v1 "k8s.io/api/apps/v1"
+	v1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 /**
@@ -15,33 +14,26 @@ import (
  * @description: kubenetes service operation
  */
 
-func NewService(name, nameSpace, kind string, objectMeta metav1.Object, port []corev1.ServicePort, svcType corev1.ServiceType) *corev1.Service {
+func NewService(name, nameSpace string, service v1.ServiceExpose) *corev1.Service {
 
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       corev1.SchemeGroupVersion.WithKind("Service").Kind,
+			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: nameSpace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(objectMeta, schema.GroupVersionKind{
-					Group:   v1.SchemeGroupVersion.Group,
-					Version: v1.SchemeGroupVersion.Version,
-					Kind:    kind,
-				}),
-			},
 			Labels: map[string]string{
 				consts.AppKubernetesName: name,
 			},
+			Annotations: service.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Type:  svcType,
-			Ports: port,
-			Selector: map[string]string{
-				consts.AppKubernetesName: name,
-			},
+			Type:              service.Type,
+			Ports:             service.Ports,
+			Selector:          service.Selector,
+			LoadBalancerClass: service.LoadBalancerClass,
 		},
 	}
 }

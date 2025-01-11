@@ -1,12 +1,15 @@
 package kube
 
 import (
+	"context"
 	"fmt"
 
-	greatsqlv1 "github.com/gagraler/greatsql-operator/api/v1"
-	"github.com/gagraler/greatsql-operator/internal/consts"
+	apiv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 /**
@@ -16,8 +19,7 @@ import (
  * @description: kubernetes pod operation
  */
 
-// NewContainers returns a new container
-func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
+func NewContainers(name string, cr *apiv1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
 
 	var volumeMounts []corev1.VolumeMount
 
@@ -29,7 +31,7 @@ func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulS
 
 	dbVolumeMount := corev1.VolumeMount{
 		Name:      fmt.Sprintf("%s-%s", name, consts.DB),
-		MountPath: consts.DB,
+		MountPath: consts.DataDir,
 	}
 
 	if isStatefulSet {
@@ -41,7 +43,7 @@ func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulS
 
 	return []corev1.Container{
 		{
-			Name:            name,
+			Name:            cr.Containers[0].Name,
 			Image:           cr.Containers[0].Image,
 			Resources:       cr.Containers[0].Resources,
 			StartupProbe:    &cr.Containers[0].StartupProbe,
@@ -50,8 +52,8 @@ func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulS
 			SecurityContext: cr.Containers[0].SecurityContext,
 			Ports: []corev1.ContainerPort{
 				{
-					Name:          consts.MysqlPortName,
-					ContainerPort: consts.MysqlPort,
+					Name:          consts.MySQLPortName,
+					ContainerPort: consts.MySQLPort,
 					Protocol:      corev1.ProtocolTCP,
 				},
 			},
@@ -62,7 +64,7 @@ func NewContainers(name string, cr *greatsqlv1.PodSpec, ordinal int, isStatefulS
 	}
 }
 
-func NewPod(configMapName string, cr *greatsqlv1.GroupReplicationCluster, ordinal int) corev1.Pod {
+func NewPod(name, namespace, configMapName string, cr *apiv1.PodSpec, ordinal int) corev1.Pod {
 
 	return corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -70,24 +72,24 @@ func NewPod(configMapName string, cr *greatsqlv1.GroupReplicationCluster, ordina
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-manager",
-			Namespace: cr.Name,
+			Name:      name + "-manager",
+			Namespace: namespace,
 			Labels: map[string]string{
-				consts.AppKubernetesName:     cr.Name,
-				consts.AppKubernetesInstance: cr.Name,
+				consts.AppKubernetesName:     name,
+				consts.AppKubernetesInstance: name,
 			},
 		},
 		Spec: corev1.PodSpec{
-			Containers:                    NewContainers(cr.Name, cr.Spec.ClusterSpec.PodSpec, ordinal, false),
-			TerminationGracePeriodSeconds: cr.Spec.ClusterSpec.PodSpec.TerminationGracePeriodSeconds,
-			SchedulerName:                 cr.Spec.ClusterSpec.PodSpec.SchedulerName,
-			ServiceAccountName:            cr.Spec.ClusterSpec.PodSpec.ServiceAccountName,
-			SecurityContext:               cr.Spec.ClusterSpec.PodSpec.PodSecurityContext,
-			NodeSelector:                  cr.Spec.ClusterSpec.PodSpec.NodeSelector,
-			Tolerations:                   cr.Spec.ClusterSpec.PodSpec.Tolerations,
+			Containers:                    NewContainers(name, cr, ordinal, false),
+			TerminationGracePeriodSeconds: cr.TerminationGracePeriodSeconds,
+			SchedulerName:                 cr.SchedulerName,
+			ServiceAccountName:            cr.ServiceAccountName,
+			SecurityContext:               cr.PodSecurityContext,
+			NodeSelector:                  cr.NodeSelector,
+			Tolerations:                   cr.Tolerations,
 			Volumes: []corev1.Volume{
 				{
-					Name: cr.Name + consts.Config,
+					Name: fmt.Sprintf("%s-%s", name, consts.Config),
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
@@ -98,15 +100,15 @@ func NewPod(configMapName string, cr *greatsqlv1.GroupReplicationCluster, ordina
 					},
 				},
 				{
-					Name: cr.Name + consts.DB,
+					Name: name + consts.DB,
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: cr.Name + consts.DB,
+							ClaimName: name + consts.DB,
 						},
 					},
 				},
 			},
-			DNSPolicy: cr.Spec.ClusterSpec.DnsPolicy,
+			//DNSPolicy: cr.Spec.ClusterSpec.DnsPolicy,
 		},
 	}
 }
@@ -133,4 +135,31 @@ func GetPodIP(pod *corev1.Pod) string {
 		return pod.Status.PodIP
 	}
 	return ""
+}
+
+func IsPodReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning || pod.DeletionTimestamp != nil {
+		return false
+	}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.ContainersReady && cond.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+
+	return false
+}
+
+func PodsByLabels(ctx context.Context, cl client.Reader, l map[string]string, namespace string) ([]corev1.Pod, error) {
+	podList := &corev1.PodList{}
+
+	opts := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(l),
+		Namespace:     namespace,
+	}
+	if err := cl.List(ctx, podList, opts); err != nil {
+		return nil, err
+	}
+
+	return podList.Items, nil
 }

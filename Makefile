@@ -30,10 +30,10 @@ GIT_COMMIT = $(shell git rev-parse HEAD)
 BUILD_TIME = $(shell date +"%Y-%m-%d %H:%M:%S")
 
 define ldflags
-"-X 'github.com/gagraler/greatsql-operator/internal/pkg/version.Version=${VERSION}' \
--X 'github.com/gagraler/greatsql-operator/internal/pkg/version.GitBranch=${GIT_BRANCH}' \
--X 'github.com/gagraler/greatsql-operator/internal/pkg/version.GitCommit=${GIT_COMMIT}' \
--X 'github.com/gagraler/greatsql-operator/internal/pkg/version.BuildTime=${BUILD_TIME}'"
+"-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.Version=${VERSION}' \
+-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.GitBranch=${GIT_BRANCH}' \
+-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.GitCommit=${GIT_COMMIT}' \
+-X 'github.com/greatsql-sigs/greatsql-operator/internal/pkg/version.BuildTime=${BUILD_TIME}'"
 endef
 
 .PHONY: all
@@ -60,7 +60,7 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=greatsql-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -96,6 +96,7 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
 	go build -ldflags ${ldflags} -o bin/manager cmd/main.go
+	go build -ldflags ${ldflags} -o bin/cli cmd/cli/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
