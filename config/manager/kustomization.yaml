@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: registry.cn-chengdu.aliyuncs.com/greatsql-sigs/greatsql-operator
-  newTag: 39f2045
+  newTag: 98b25de
