@@ -5,9 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to build'
+        description: 'Build branch'
         required: true
         default: 'main'
+        type: string
+      version:
+        description: 'Version'
+        required: true
+        default: 'alpha'
         type: string
 
   push:
@@ -19,7 +24,7 @@ on:
 
 jobs:
     #build:
-    log-the-inputs:
+    parameter-build:
 
         runs-on: ubuntu-latest
 
@@ -50,8 +55,8 @@ jobs:
           run: |
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-6)
             IMAGE_TAG=${{ github.repository }}:${SHORT_SHA}
-            docker buildx build --push --tag registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} .
-            docker tag registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
+            docker buildx build --push --tag registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${{ inputs.version }} .
+            docker tag registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${SHORT_SHA} registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:${{ inputs.version }}
 
         - name: 'Create a release for Tag'
           id: create_release
@@ -60,7 +65,7 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             tag_name: ${{ github.ref }}
-            release_name: Release GreatSQL Operator-v${{ github.ref }}
+            release_name: ${{ inputs.version}}
             prerelease: false
             body: |
               请点击查看 [更新日志](https://github.com/greatsql-sigs/greatsql-operator/blob/main/CHANGELOG.md).
