@@ -76,8 +76,7 @@ jobs:
         run: |
           VERSION='${{ needs.build.outputs.version }}'
           echo "Creating tag $VERSION..."
-          git config user.name "GreatSQL"
-          git config user.email "jinrong.ye@greatdb.com"
+          git config user.name "gagraler"
           git tag -d "$VERSION" || true
           git push origin :refs/tags/$VERSION || true
 
