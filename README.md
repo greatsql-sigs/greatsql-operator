@@ -34,7 +34,7 @@ This project is developed based on the `Kubebuilder` framework, allowing you to 
 | GreatSQL                 | 8.0.25-25        | ✅     |             |
 
 ## Installation
-For detailed deployment instructions, please refer to the [Deployment Guide](docs/manual_zh.md).
+For detailed deployment instructions, please refer to the [Project Manual](docs/manual.md).
 
 ## Contribution Guide
 Please see our [Contribution Guide](./CONTRIBUTING_zh.md) for details on how to contribute to this project.

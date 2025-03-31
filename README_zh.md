@@ -31,7 +31,7 @@ GreatSQL Operator 是一个用于在 Kubernetes 上部署和管理 GreatSQL 数�
 | GreatSQL                 | 8.0.25-25       | ✅    |            |
 
 ## 安装
-有关详细的部署说明，请参阅[部署指南](docs/manual_zh.md)。
+有关详细的部署说明，请参阅[项目手册](docs/manual.md)。
 
 ## 贡献指南
 请查看我们的[贡献指南](./CONTRIBUTING_zh.md)了解如何为该项目做出贡献。
