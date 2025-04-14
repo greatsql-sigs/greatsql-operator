@@ -63,10 +63,10 @@ spec:
         # seccompProfile:
         #   type: RuntimeDefault
       containers:
-      - args:
-        - --leader-elect
+      - name: greatsql-controller-manager
         image: registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
-        name: greatsql-controller-manager
+        args:
+        - --leader-elect
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
