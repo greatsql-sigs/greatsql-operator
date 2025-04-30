@@ -4,15 +4,15 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: SingleInstance-viewer-role
+    app.kubernetes.io/instance: Standalone-viewer-role
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: greatsql
     app.kubernetes.io/part-of: greatsql
     app.kubernetes.io/managed-by: kustomize
-  name: SingleInstance-viewer-role
+  name: Standalone-viewer-role
 rules:
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - singles
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - singles/status
   verbs:

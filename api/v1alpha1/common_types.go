@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1alpha1
 
 import (
 	"golang.org/x/text/cases"
@@ -33,14 +33,14 @@ import (
  */
 
 // Category defines the type of the GreatSql
-// Supported values are "SingleInstance" "GroupReplicationCluster"
-// SingleInstance: SingleInstance instance of GreatSql
+// Supported values are "Standalone" "GroupReplicationCluster"
+// Standalone: Standalone instance of GreatSql
 // TODO: ReplicaofCluster: Master-slave replication cluster
 // GroupReplicationCluster: GroupReplicationCluster of a GreatSql cluster(MGR)
 // type Category string
 
 // const (
-// 	SingleInstanceCategory          Category = "SingleInstance"
+// 	StandaloneCategory          Category = "Standalone"
 // 	ReplicaofClusterCategory        Category = "ReplicaofCluster"
 // 	GroupReplicationClusterCategory Category = "GroupReplicationCluster"
 // )
@@ -173,12 +173,12 @@ type ServiceExpose struct {
 	LoadBalancerClass *string              `json:"loadBalancerClass,omitempty"`
 }
 
-// PodAffinity returns the SingleInstance pod affinity of the resource
-func (s *SingleInstance) PodAffinity(labels map[string]string) *corev1.Affinity {
+// PodAffinity returns the Standalone pod affinity of the resource
+func (s *Standalone) PodAffinity(labels map[string]string) *corev1.Affinity {
 	return SetPodAffinity(s.Spec, labels)
 }
 
-// PodAffinity returns the SingleInstance primary group cluster pod affinity of the resource
+// PodAffinity returns the Standalone primary group cluster pod affinity of the resource
 func (s *GroupReplicationCluster) PodAffinity(labels map[string]string) *corev1.Affinity {
 	return SetPodAffinity(s.Spec, labels)
 }
@@ -188,7 +188,7 @@ func SetPodAffinity(spec interface{}, labels map[string]string) *corev1.Affinity
 	var topologyKey *string
 
 	switch spec := spec.(type) {
-	case SingleInstance:
+	case Standalone:
 		topologyKey = spec.Spec.PodSpec.Affinity.TopologyKey
 	case GroupReplicationCluster:
 		topologyKey = spec.Spec.ClusterSpec.PodSpec.Affinity.TopologyKey

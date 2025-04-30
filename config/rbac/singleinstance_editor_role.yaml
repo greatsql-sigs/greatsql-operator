@@ -4,15 +4,15 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: SingleInstance-editor-role
+    app.kubernetes.io/instance: Standalone-editor-role
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: greatsql
     app.kubernetes.io/part-of: greatsql
     app.kubernetes.io/managed-by: kustomize
-  name: SingleInstance-editor-role
+  name: Standalone-editor-role
 rules:
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - singles
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - singles/status
   verbs:

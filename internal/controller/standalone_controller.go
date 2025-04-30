@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,15 +33,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
-	apiv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
 	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
 )
 
-// SingleInstanceReconciler reconciles a SingleInstance object
-type SingleInstanceReconciler struct {
+// StandaloneReconciler reconciles a Standalone object
+type StandaloneReconciler struct {
 	client.Client
 	Scheme        *runtime.Scheme
 	Log           logr.Logger
@@ -47,9 +49,9 @@ type SingleInstanceReconciler struct {
 	Resource      *kube.ResourceOperation
 }
 
-//+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=singleinstances/finalizers,verbs=update
+//+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -57,64 +59,39 @@ type SingleInstanceReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // Modify the Reconcile function to compare the state specified by
-// the SingleInstance object against the actual cluster state, and then
+// the Standalone object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
-func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("Reconciling GreatSQL Single Instance...")
+func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := r.Log.WithValues("standalone", req.NamespacedName)
 
-	// Get the SingleInstance resource
-	cr := &apiv1.SingleInstance{}
-	if err := r.Client.Get(ctx, req.NamespacedName, cr); err != nil {
+	// Fetch the Standalone instance
+	cr := &v1alpha1.Standalone{}
+	err := r.Get(ctx, req.NamespacedName, cr)
+	if err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("SingleInstance resource not found. Ignoring since object must be deleted")
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			log.Info("Standalone resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
-		r.Log.Error(err, "Failed to get SingleInstance")
+		// Error reading the object - requeue the request.
+		log.Error(err, "Failed to get Standalone")
 		return ctrl.Result{}, err
 	}
-
-	// Initialize resource operation helper
-	r.Resource = kube.NewResourceOperation(r.Log, r.Client)
 
 	// Handle finalizer
 	if err := r.handleFinalizer(ctx, cr); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// 只在首次创建 CR 时创建资源
-	if cr.Status.State == "" {
-		if err := r.createRequiredResources(ctx, req, cr); err != nil {
-			r.Log.Error(err, "Failed to create resources")
-			return ctrl.Result{}, err
-		}
-
-		// 更新 CR Status，让下次 Reconcile 知道已经创建过资源
-		cr.Status.State = apiv1.StateInitializing
-		if updateErr := r.Client.Status().Update(ctx, cr); updateErr != nil {
-			r.Log.Error(updateErr, "Failed to update CR status after creation")
-			return ctrl.Result{}, updateErr
-		}
-
-		// 此处不再立刻 Requeue, 返回空的 ctrl.Result，等待下一次触发(如 Deployment 状态变更、用户手动修改 CR、或 CRDs 事件)
-		return ctrl.Result{}, nil
-	}
-
-	// Check if deployment exists
-	deployGreatsql := &appsv1.Deployment{}
-	if err := r.Client.Get(ctx, req.NamespacedName, deployGreatsql); err != nil {
-		if !errors.IsNotFound(err) {
-			r.Log.Error(err, "Failed to get Deployment")
-			return ctrl.Result{}, err
-		}
-		if _, err := r.computeStatus(ctx, cr); err != nil {
-			r.Log.Error(err, "Failed to update status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+	// Create required resources
+	if err := r.createRequiredResources(ctx, req, cr); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Update status
@@ -126,8 +103,8 @@ func (r *SingleInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-// handleFinalizer handles the finalizer of the SingleInstance
-func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, cr *apiv1.SingleInstance) error {
+// handleFinalizer handles the finalizer of the Standalone
+func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1.Standalone) error {
 	finalizer := &utils.GreatSqlFinalizer{
 		Cli:      r.Client,
 		GreatSql: cr,
@@ -141,7 +118,7 @@ func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, cr *apiv
 			r.Log.Error(err, "Could not remove finalizer")
 			return err
 		}
-		if err := r.Resource.UpdateResource(ctx, cr, cr.Name, cr.Namespace, consts.SingleInstance); err != nil {
+		if err := r.Resource.UpdateResource(ctx, cr, cr.Name, cr.Namespace, consts.Standalone); err != nil {
 			return err
 		}
 		return nil
@@ -149,8 +126,58 @@ func (r *SingleInstanceReconciler) handleFinalizer(ctx context.Context, cr *apiv
 	return nil
 }
 
-// createConfigMap creates a ConfigMap for the SingleInstance
-func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl.Request) error {
+func (r *StandaloneReconciler) createOrPatch(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": req.Name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": req.Name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  req.Name,
+							Image: cr.Spec.PodSpec.Containers[0].Image,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return kube.CreateOrPatchWorkload(
+		ctx,
+		r.Client,
+		r.Client,
+		sts,
+		kube.StatefulSetType,
+		cr.Namespace,
+		cr,
+		r.Scheme,
+		true,          // 是否等待 ready
+		2*time.Minute, // 超时 2 分钟
+	)
+
+}
+
+func int32Ptr(i int32) *int32 {
+	return &i
+}
+
+// createConfigMap creates a ConfigMap for the Standalone
+func (r *StandaloneReconciler) createConfigMap(ctx context.Context, req ctrl.Request) error {
 	cnf := &mysql.MySQLConfig{
 		ServerID:                   "0",
 		EnableCluster:              false,
@@ -170,36 +197,36 @@ func (r *SingleInstanceReconciler) createConfigMap(ctx context.Context, req ctrl
 	return r.Resource.CreateResource(ctx, configMap, req.Name, req.Namespace, "ConfigMap")
 }
 
-// createPersistentVolumeClaim creates a PersistentVolumeClaim for the SingleInstance
-func (r *SingleInstanceReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+// createPersistentVolumeClaim creates a PersistentVolumeClaim for the Standalone
+func (r *StandaloneReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
 	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, &cr.Spec.PodSpec)
 	return r.Resource.CreateResource(ctx, pvc, req.Name, req.Namespace, "PersistentVolumeClaim")
 }
 
-// createDeployment creates a Deployment for the SingleInstance
-func (r *SingleInstanceReconciler) createDeployment(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+// createDeployment creates a Deployment for the Standalone
+func (r *StandaloneReconciler) createDeployment(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
 	configMapName := fmt.Sprintf("%s-%s", req.Name, consts.Config)
 	deploy := kube.NewDeployment(configMapName, cr, int(*cr.Spec.Size))
 	return r.Resource.CreateResource(ctx, deploy, req.Name, req.Namespace, "Deployment")
 }
 
-// createService creates a Service for the SingleInstance
-func (r *SingleInstanceReconciler) createService(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+// createService creates a Service for the Standalone
+func (r *StandaloneReconciler) createService(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
 	service := kube.NewService(req.Name, req.Namespace, cr.Spec.ServiceExpose)
 
 	return r.Resource.CreateResource(ctx, service, req.Name, req.Namespace, "Service")
 }
 
-// computeStatus updates the status of the SingleInstance
-func (r *SingleInstanceReconciler) computeStatus(ctx context.Context, cr *apiv1.SingleInstance) (*apiv1.SingleInstanceStatus, error) {
+// computeStatus updates the status of the Standalone
+func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.Standalone) (*v1alpha1.StandaloneStatus, error) {
 	r.Log.Info("Computing status")
 
 	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
 		return nil, nil
 	}
 
-	result := &apiv1.SingleInstanceStatus{
-		State: apiv1.StateInitializing,
+	result := &v1alpha1.StandaloneStatus{
+		State: v1alpha1.StateInitializing,
 	}
 
 	deployList := &appsv1.DeploymentList{}
@@ -210,7 +237,7 @@ func (r *SingleInstanceReconciler) computeStatus(ctx context.Context, cr *apiv1.
 
 	switch len(deployList.Items) {
 	case 0:
-		result.State = apiv1.StatePaused
+		result.State = v1alpha1.StatePaused
 		r.Log.Info("no deployment found")
 	case 1:
 		status := deployList.Items[0].Status
@@ -219,7 +246,7 @@ func (r *SingleInstanceReconciler) computeStatus(ctx context.Context, cr *apiv1.
 		result.State = determineState(status.ReadyReplicas)
 	default:
 		r.Log.Info("too many deployments found", "count", len(deployList.Items))
-		result.State = apiv1.StateError
+		result.State = v1alpha1.StateError
 		return result, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
 	}
 
@@ -238,22 +265,22 @@ func (r *SingleInstanceReconciler) computeStatus(ctx context.Context, cr *apiv1.
 }
 
 // determineState helps decide the state based on ready replicas
-func determineState(readyReplicas int32) apiv1.State {
+func determineState(readyReplicas int32) v1alpha1.State {
 	if readyReplicas == 1 {
-		return apiv1.StateReady
+		return v1alpha1.StateReady
 	}
-	return apiv1.StateInitializing
+	return v1alpha1.StateInitializing
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *SingleInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *StandaloneReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&apiv1.SingleInstance{}).
+		For(&v1alpha1.Standalone{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
 
-func (r *SingleInstanceReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *apiv1.SingleInstance) error {
+func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
 	// Create ConfigMap
 	if exists, err := r.Resource.ResourceExists(ctx, req.Name+"-config", req.Namespace, &corev1.ConfigMap{}); err != nil {
 		return err

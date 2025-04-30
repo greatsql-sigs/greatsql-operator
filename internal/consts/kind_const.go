@@ -9,8 +9,8 @@ package consts
 
 // Kind const
 const (
-	// SingleInstance const
-	SingleInstance string = "SingleInstance"
+	// Standalone const
+	Standalone string = "Standalone"
 	// ReplicaofGroupCluster const
 	ReplicaofGroupCluster string = "ReplicaofGroupCluster"
 	// GroupReplicationCluster const

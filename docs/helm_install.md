@@ -43,7 +43,7 @@ helm delete greatsql
 | 参数 | 描述 | 默认 |
 |----------------------------|---------------------------------------------------------------|---------------------------------------------------------------|
 | `replicaCount` | 单实例部署的副本数 | `1` |
-| `type` | 部署类型：`SingleInstance` 或 `GroupReplicationCluster` | `SingleInstance` |
+| `type` | 部署类型：`Standalone` 或 `GroupReplicationCluster` | `Standalone` |
 | `image.repository` | 映像存储库 | `registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator` |
 | `image.tag` | 图片标签 | `latest` |
 | `service.type` | Kubernetes 服务类型 | `ClusterIP` |
@@ -54,10 +54,10 @@ helm delete greatsql
 | `configFile.configMapName` | 用于配置的 ConfigMap 的名称 | `greatsql-config` |
 
 ## 示例配置
-### 1. 部署 SingleInstance
+### 1. 部署 Standalone
 ```sh
 helm install greatsql greatsql-operator/greatsql-operator \
---set type=SingleInstance \
+--set type=Standalone \
 --set replicaCount=1 \
 --set storage.size=20Gi
 ```

@@ -1,7 +1,7 @@
 package kube
 
 import (
-	v1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +14,7 @@ import (
  * @description: kubenetes service operation
  */
 
-func NewService(name, nameSpace string, service v1.ServiceExpose) *corev1.Service {
+func NewService(name, nameSpace string, service v1alpha1.ServiceExpose) *corev1.Service {
 
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{

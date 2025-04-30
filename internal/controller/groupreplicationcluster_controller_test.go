@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 )
 
 var _ = Describe("GroupReplicationCluster Controller", func() {
@@ -40,13 +40,13 @@ var _ = Describe("GroupReplicationCluster Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		GroupReplicationCluster := &greatsqlv1.GroupReplicationCluster{}
+		GroupReplicationCluster := &v1alpha1.GroupReplicationCluster{}
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind GroupReplicationCluster")
 			err := k8sClient.Get(ctx, typeNamespacedName, GroupReplicationCluster)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &greatsqlv1.GroupReplicationCluster{
+				resource := &v1alpha1.GroupReplicationCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,7 +59,7 @@ var _ = Describe("GroupReplicationCluster Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &greatsqlv1.GroupReplicationCluster{}
+			resource := &v1alpha1.GroupReplicationCluster{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 

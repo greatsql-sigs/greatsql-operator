@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1alpha1
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
@@ -24,12 +24,12 @@ import (
 /**
  * @author: HuaiAn xu
  * @date: 2024-03-17 18:32:59
- * @file: single_types.go
- * @description: SingleInstance types
+ * @file: standalone_types.go
+ * @description: Standalone types
  */
 
-// SingleInstance defines the desired state of SingleInstance
-type SingleInstanceSpec struct {
+// Standalone defines the desired state of Standalone
+type StandaloneSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 
 	// Category   GreatSqlType                  `json:"category,omitempty"`
@@ -41,16 +41,16 @@ type SingleInstanceSpec struct {
 	UpdateStrategy appsv1.DeploymentStrategyType `json:"updateStrategy,omitempty"`
 }
 
-// GetSize returns the size of the SingleInstance
-func (s *SingleInstanceSpec) GetSize() int32 {
+// GetSize returns the size of the Standalone
+func (s *StandaloneSpec) GetSize() int32 {
 	if s.Size != nil {
 		return *s.Size
 	}
 	return 1
 }
 
-// SingleInstanceStatus defines the observed state of SingleInstance
-type SingleInstanceStatus struct {
+// StandaloneStatus defines the observed state of Standalone
+type StandaloneStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	State State  `json:"state,omitempty"`
@@ -61,33 +61,33 @@ type SingleInstanceStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state",description="The access point of the SingleInstance"
-//+kubebuilder:printcolumn:name="Size",type="integer",JSONPath=".spec.size",description="The size of the SingleInstance"
-//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The ready of the SingleInstance"
-//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the SingleInstance"
+//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state",description="The access point of the Standalone"
+//+kubebuilder:printcolumn:name="Size",type="integer",JSONPath=".spec.size",description="The size of the Standalone"
+//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The ready of the Standalone"
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the Standalone"
 
-// SingleInstance is the Schema for the singles API
-type SingleInstance struct {
+// Standalone is the Schema for the singles API
+type Standalone struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   SingleInstanceSpec   `json:"spec,omitempty"`
-	Status SingleInstanceStatus `json:"status,omitempty"`
+	Spec   StandaloneSpec   `json:"spec,omitempty"`
+	Status StandaloneStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// SingleInstanceList contains a list of SingleInstance
-type SingleInstanceList struct {
+// StandaloneList contains a list of Standalone
+type StandaloneList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SingleInstance `json:"items"`
+	Items           []Standalone `json:"items"`
 }
 
-func (s *SingleInstanceList) Finalizer() []string {
-	return []string{"finalizer.SingleInstance.greatsql.cn"}
+func (s *StandaloneList) Finalizer() []string {
+	return []string{"finalizer.standalone.database.greatsql.cn"}
 }
 
 func init() {
-	SchemeBuilder.Register(&SingleInstance{}, &SingleInstanceList{})
+	SchemeBuilder.Register(&Standalone{}, &StandaloneList{})
 }

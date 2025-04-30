@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,6 +58,10 @@ type GroupReplicationClusterStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state",description="The access point of the GroupReplicationCluster"
+//+kubebuilder:printcolumn:name="Size",type="integer",JSONPath=".spec.size",description="The size of the GroupReplicationCluster"
+//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The ready of the GroupReplicationCluster"
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the GroupReplicationCluster"
 
 // GroupReplicationCluster is the Schema for the GroupReplicationClusters API
 type GroupReplicationCluster struct {

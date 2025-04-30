@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
@@ -46,9 +46,9 @@ type GroupReplicationClusterReconciler struct {
 	EventRecorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=groupreplicationclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=groupreplicationclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=greatsql.greatsql.cn,resources=groupreplicationclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=statefulset,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -62,7 +62,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 
 	r.Log.Info("Reconciling GroupReplicationCluster...")
 
-	mgr := &greatsqlv1.GroupReplicationCluster{}
+	mgr := &v1alpha1.GroupReplicationCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, mgr); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Error(err, "GroupReplicationCluster resource not found. Ignoring since object must be deleted")
@@ -83,7 +83,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 }
 
 // createResources creates the resources for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
 	// Create common resources first
 	if err := r.createSecret(ctx, req, mgr); err != nil {
 		return err
@@ -149,7 +149,7 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 }
 
 // createSecret creates a Secret for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
 	secret := kube.NewSecretEnv(req.Name+"-secret", req.Namespace, mgr.Spec.ClusterSpec.PodSpec.Containers[0].Envs)
 	if err := r.Client.Create(ctx, secret); err != nil {
 		r.Log.Error(err, "Could not create secret")
@@ -159,7 +159,7 @@ func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, re
 }
 
 // createConfigMap creates a ConfigMap for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
 	exists := &corev1.ConfigMap{}
 	err := r.Client.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, exists)
@@ -189,7 +189,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	// 条件: 1. 节点角色为仲裁者(Arbitrator)
 	//      2. Size 字段不为空
 	//      3. Size 值为 1
-	if mgr.Spec.Member[ordinal].Role == greatsqlv1.ArbitratorRole && mgr.Spec.Member[ordinal].Size != nil && *mgr.Spec.Member[ordinal].Size == 1 {
+	if mgr.Spec.Member[ordinal].Role == v1alpha1.ArbitratorRole && mgr.Spec.Member[ordinal].Size != nil && *mgr.Spec.Member[ordinal].Size == 1 {
 		cnf.GroupReplicationArbitrator = "ON"
 	} else {
 		cnf.GroupReplicationArbitrator = "OFF"
@@ -211,7 +211,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 }
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, mgr.Spec.ClusterSpec.PodSpec)
 	pvc.Name = fmt.Sprintf("%s-%s-%d", req.Name, consts.DB, ordinal)
 	if err := r.Client.Create(ctx, pvc); err != nil {
@@ -223,7 +223,7 @@ func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx cont
 }
 
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
 	sts := kube.NewStatefulSet(configMapName, fmt.Sprintf("%s-headless", req.Name), mgr, ordinal)
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
@@ -249,7 +249,7 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 }
 
 // createService creates a Service for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *greatsqlv1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
 	service := kube.NewService(req.Name, req.Namespace, mgr.Spec.ClusterSpec.ServiceExpose)
 	service.Name = fmt.Sprintf("%s-headless", req.Name)
 	service.Spec.ClusterIP = corev1.ClusterIPNone
@@ -262,7 +262,7 @@ func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, r
 }
 
 // initializeCluster initializes the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	mysql := mysql.MySQL{
 		Host:     fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", mgr.Name, ordinal, mgr.Name, mgr.Namespace),
 		Port:     consts.MySQLPort,
@@ -286,7 +286,7 @@ func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *greatsqlv1.Gr
 	return r.joinSecondaryNode(mgr, ordinal, &mysql)
 }
 
-func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *greatsqlv1.GroupReplicationCluster, mysql *mysql.MySQL) error {
+func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.GroupReplicationCluster, mysql *mysql.MySQL) error {
 	r.Log.Info("Bootstrapping primary node...")
 	r.EventRecorder.Event(mgr, "Normal", "Bootstrap", "Bootstrapping the cluster with the first node")
 
@@ -314,7 +314,7 @@ func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *greatsqlv1
 	return nil
 }
 
-func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *greatsqlv1.GroupReplicationCluster, ordinal int, mysql *mysql.MySQL) error {
+func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.GroupReplicationCluster, ordinal int, mysql *mysql.MySQL) error {
 	r.Log.Info("Adding new node as secondary", "Node", ordinal)
 
 	primaryHost := fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace)
@@ -340,6 +340,6 @@ func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *greatsqlv1.Gr
 // SetupWithManager sets up the controller with the Manager.
 func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&greatsqlv1.GroupReplicationCluster{}).
+		For(&v1alpha1.GroupReplicationCluster{}).
 		Complete(r)
 }

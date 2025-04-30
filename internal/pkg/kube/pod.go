@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	apiv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +19,7 @@ import (
  * @description: kubernetes pod operation
  */
 
-func NewContainers(name string, cr *apiv1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
+func NewContainers(name string, cr *v1alpha1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
 
 	var volumeMounts []corev1.VolumeMount
 
@@ -64,7 +64,7 @@ func NewContainers(name string, cr *apiv1.PodSpec, ordinal int, isStatefulSet bo
 	}
 }
 
-func NewPod(name, namespace, configMapName string, cr *apiv1.PodSpec, ordinal int) corev1.Pod {
+func NewPod(name, namespace, configMapName string, cr *v1alpha1.PodSpec, ordinal int) corev1.Pod {
 
 	return corev1.Pod{
 		TypeMeta: metav1.TypeMeta{

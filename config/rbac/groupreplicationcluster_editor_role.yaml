@@ -12,7 +12,7 @@ metadata:
   name: GroupReplicationCluster-editor-role
 rules:
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - GroupReplicationClusters
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - GroupReplicationClusters/status
   verbs:

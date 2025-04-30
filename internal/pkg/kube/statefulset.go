@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,7 +19,7 @@ import (
  * @description: statefulset operation
  */
 
-func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupReplicationCluster, ordinal int) *appsv1.StatefulSet {
+func NewStatefulSet(configMapName, serviceName string, cr *v1alpha1.GroupReplicationCluster, ordinal int) *appsv1.StatefulSet {
 
 	labels := map[string]string{
 		consts.AppKubernetesName:     cr.Name,
@@ -44,8 +44,8 @@ func NewStatefulSet(configMapName, serviceName string, cr *greatsqlv1.GroupRepli
 			Namespace: cr.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cr, schema.GroupVersionKind{
-					Group:   greatsqlv1.GroupVersion.Group,
-					Version: greatsqlv1.GroupVersion.Version,
+					Group:   v1alpha1.GroupVersion.Group,
+					Version: v1alpha1.GroupVersion.Version,
 					Kind:    consts.GroupReplicationCluster,
 				}),
 			},

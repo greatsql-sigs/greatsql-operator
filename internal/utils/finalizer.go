@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	singlev1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,7 +23,7 @@ import (
  */
 type GreatSqlFinalizer struct {
 	Cli      client.Client
-	GreatSql *singlev1.SingleInstance
+	GreatSql *v1alpha1.Standalone
 }
 
 var (

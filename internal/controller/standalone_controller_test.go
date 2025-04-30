@@ -27,10 +27,10 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 )
 
-var _ = Describe("SingleInstance Controller", func() {
+var _ = Describe("Standalone Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -40,13 +40,13 @@ var _ = Describe("SingleInstance Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		SingleInstance := &greatsqlv1.SingleInstance{}
+		Standalone := &v1alpha1.Standalone{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind SingleInstance")
-			err := k8sClient.Get(ctx, typeNamespacedName, SingleInstance)
+			By("creating the custom resource for the Kind Standalone")
+			err := k8sClient.Get(ctx, typeNamespacedName, Standalone)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &greatsqlv1.SingleInstance{
+				resource := &v1alpha1.Standalone{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,16 +59,16 @@ var _ = Describe("SingleInstance Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &greatsqlv1.SingleInstance{}
+			resource := &v1alpha1.Standalone{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance SingleInstance")
+			By("Cleanup the specific resource instance Standalone")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &SingleInstanceReconciler{
+			controllerReconciler := &StandaloneReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}

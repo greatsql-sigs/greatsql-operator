@@ -2,10 +2,11 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    cert-manager.io/inject-ca-from: CERTIFICATE_NAMESPACE/CERTIFICATE_NAME
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: groupreplicationclusters.greatsql.greatsql.cn
+  name: groupreplicationclusters.database.greatsql.cn
 spec:
-  group: greatsql.greatsql.cn
+  group: database.greatsql.cn
   names:
     kind: GroupReplicationCluster
     listKind: GroupReplicationClusterList
@@ -13,7 +14,24 @@ spec:
     singular: groupreplicationcluster
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: The access point of the GroupReplicationCluster
+      jsonPath: .status.state
+      name: State
+      type: string
+    - description: The size of the GroupReplicationCluster
+      jsonPath: .spec.size
+      name: Size
+      type: integer
+    - description: The ready of the GroupReplicationCluster
+      jsonPath: .status.ready
+      name: Ready
+      type: integer
+    - description: The age of the GroupReplicationCluster
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: GroupReplicationCluster is the Schema for the GroupReplicationClusters
@@ -2885,37 +2903,37 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: singleinstances.greatsql.greatsql.cn
+  name: standalones.database.greatsql.cn
 spec:
-  group: greatsql.greatsql.cn
+  group: database.greatsql.cn
   names:
-    kind: SingleInstance
-    listKind: SingleInstanceList
-    plural: singleinstances
-    singular: singleinstance
+    kind: Standalone
+    listKind: StandaloneList
+    plural: standalones
+    singular: standalone
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The access point of the SingleInstance
+    - description: The access point of the Standalone
       jsonPath: .status.state
       name: State
       type: string
-    - description: The size of the SingleInstance
+    - description: The size of the Standalone
       jsonPath: .spec.size
       name: Size
       type: integer
-    - description: The ready of the SingleInstance
+    - description: The ready of the Standalone
       jsonPath: .status.ready
       name: Ready
       type: integer
-    - description: The age of the SingleInstance
+    - description: The age of the Standalone
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SingleInstance is the Schema for the singles API
+        description: Standalone is the Schema for the singles API
         properties:
           apiVersion:
             description: |-
@@ -2935,7 +2953,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SingleInstance defines the desired state of SingleInstance
+            description: Standalone defines the desired state of Standalone
             properties:
               annotations:
                 additionalProperties:
@@ -4326,7 +4344,7 @@ spec:
                 type: object
             type: object
           status:
-            description: SingleInstanceStatus defines the observed state of SingleInstance
+            description: StandaloneStatus defines the observed state of Standalone
             properties:
               age:
                 type: string
@@ -4365,10 +4383,11 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    cert-manager.io/inject-ca-from: CERTIFICATE_NAMESPACE/CERTIFICATE_NAME
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: groupreplicationclusters.greatsql.greatsql.cn
+  name: groupreplicationclusters.database.greatsql.cn
 spec:
-  group: greatsql.greatsql.cn
+  group: database.greatsql.cn
   names:
     kind: GroupReplicationCluster
     listKind: GroupReplicationClusterList
@@ -4376,7 +4395,24 @@ spec:
     singular: groupreplicationcluster
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: The access point of the GroupReplicationCluster
+      jsonPath: .status.state
+      name: State
+      type: string
+    - description: The size of the GroupReplicationCluster
+      jsonPath: .spec.size
+      name: Size
+      type: integer
+    - description: The ready of the GroupReplicationCluster
+      jsonPath: .status.ready
+      name: Ready
+      type: integer
+    - description: The age of the GroupReplicationCluster
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: GroupReplicationCluster is the Schema for the GroupReplicationClusters
@@ -7248,37 +7284,37 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: singleinstances.greatsql.greatsql.cn
+  name: standalones.database.greatsql.cn
 spec:
-  group: greatsql.greatsql.cn
+  group: database.greatsql.cn
   names:
-    kind: SingleInstance
-    listKind: SingleInstanceList
-    plural: singleinstances
-    singular: singleinstance
+    kind: Standalone
+    listKind: StandaloneList
+    plural: standalones
+    singular: standalone
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The access point of the SingleInstance
+    - description: The access point of the Standalone
       jsonPath: .status.state
       name: State
       type: string
-    - description: The size of the SingleInstance
+    - description: The size of the Standalone
       jsonPath: .spec.size
       name: Size
       type: integer
-    - description: The ready of the SingleInstance
+    - description: The ready of the Standalone
       jsonPath: .status.ready
       name: Ready
       type: integer
-    - description: The age of the SingleInstance
+    - description: The age of the Standalone
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SingleInstance is the Schema for the singles API
+        description: Standalone is the Schema for the singles API
         properties:
           apiVersion:
             description: |-
@@ -7298,7 +7334,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SingleInstance defines the desired state of SingleInstance
+            description: Standalone defines the desired state of Standalone
             properties:
               annotations:
                 additionalProperties:
@@ -8689,7 +8725,7 @@ spec:
                 type: object
             type: object
           status:
-            description: SingleInstanceStatus defines the observed state of SingleInstance
+            description: StandaloneStatus defines the observed state of Standalone
             properties:
               age:
                 type: string
@@ -8832,7 +8868,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - groupreplicationclusters
   verbs:
@@ -8844,13 +8880,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - groupreplicationclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - groupreplicationclusters/status
   verbs:
@@ -8858,9 +8894,9 @@ rules:
   - patch
   - update
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
-  - singleinstances
+  - standalones
   verbs:
   - create
   - delete
@@ -8870,15 +8906,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
-  - singleinstances/finalizers
+  - standalones/finalizers
   verbs:
   - update
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
-  - singleinstances/status
+  - standalones/status
   verbs:
   - get
   - patch
@@ -9035,7 +9071,7 @@ spec:
             port: 8081
           initialDelaySeconds: 15
           periodSeconds: 20
-        name: greatsql-controller-manager
+        name: manager
         readinessProbe:
           httpGet:
             path: /readyz

@@ -10,12 +10,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-greatsql-greatsql-cn-v1-groupreplicationcluster
+      path: /mutate-database-greatsql-cn-v1-groupreplicationcluster
   failurePolicy: Fail
   name: mgroupreplicationcluster.kb.io
   rules:
   - apiGroups:
-    - greatsql.greatsql.cn
+    - database.greatsql.cn
     apiVersions:
     - v1
     operations:
@@ -36,12 +36,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-greatsql-greatsql-cn-v1-groupreplicationcluster
+      path: /validate-database-greatsql-cn-v1-groupreplicationcluster
   failurePolicy: Fail
   name: vgroupreplicationcluster.kb.io
   rules:
   - apiGroups:
-    - greatsql.greatsql.cn
+    - database.greatsql.cn
     apiVersions:
     - v1
     operations:

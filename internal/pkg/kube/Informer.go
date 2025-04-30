@@ -113,13 +113,13 @@ func (e *EventHandlerFunc) PersistentVolumeClaimInformer(factory informers.Share
 	})
 }
 
-// SingleInstanceInformer SingleInstance Informer
+// StandaloneInformer Standalone Informer
 // Custom Resource Definition Informer
-// func SingleInstanceInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-// 	return informerUpdate[v1.SingleInstance](factory.Core().V1().Pods().Informer, EventHandlerFunc{
+// func StandaloneInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
+// 	return informerUpdate[v1.Standalone](factory.Core().V1().Pods().Informer, EventHandlerFunc{
 // 		UpdateFunc: func(oldObj, newObj interface{}) {
-// 			oldPod := oldObj.(*v1.SingleInstance)
-// 			newPod := newObj.(*v1.SingleInstance)
+// 			oldPod := oldObj.(*v1.Standalone)
+// 			newPod := newObj.(*v1.Standalone)
 // 			if oldPod.Status.Replicas != newPod.Status.Replicas {
 // 				fmt.Printf("Instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
 // 			}

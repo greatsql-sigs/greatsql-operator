@@ -15,7 +15,7 @@ This project is developed and maintained by the GreatSQL sigs community and is o
 ## Project Description
 GreatSQL Operator is a tool for deploying and managing GreatSQL database clusters on Kubernetes. It provides the following core features:
 
-- Automated deployment and management of GreatSQL single instances and clusters (MGR)
+- Automated deployment and management of GreatSQL Standalone instances and clusters (MGR)
 - Automatic failover and self-healing capabilities
 - Backup and recovery management
 - Monitoring integration

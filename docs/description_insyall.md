@@ -19,9 +19,9 @@ kubectl apply -f dist/install.yaml
 kubectl get pods -n greatsql-system
 ```
 
-**创建CRD**：根据需要创建Custom Resource Definitions（CRD），例如SingleInstance或GroupReplicationCluster
+**创建CRD**：根据需要创建Custom Resource Definitions（CRD），例如Standalone或GroupReplicationCluster
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/single/singleinstance.yaml
+kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/single/Standalone.yaml
     
 kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/cluster/groupreplicationcluster.yaml
 ```
@@ -36,7 +36,7 @@ kubectl get pods -n greatsql
 kubectl delete -f install.yaml
 kubectl delete ns greatsql-system
 kubectl delete ns greatsql
-kubectl delete crd singleinstances.greatsql.io
+kubectl delete crd Standalones.greatsql.io
 kubectl delete crd groupreplicationclusters.greatsql.io
 kubectl delete mutatingwebhookconfiguration mgroupreplicationcluster.kb.io
 kubectl delete validatingwebhookconfiguration vgroupreplicationcluster.kb.io

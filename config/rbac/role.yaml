@@ -65,7 +65,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - groupreplicationclusters
   verbs:
@@ -77,13 +77,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - groupreplicationclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
   - groupreplicationclusters/status
   verbs:
@@ -91,9 +91,9 @@ rules:
   - patch
   - update
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
-  - singleinstances
+  - standalones
   verbs:
   - create
   - delete
@@ -103,15 +103,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
-  - singleinstances/finalizers
+  - standalones/finalizers
   verbs:
   - update
 - apiGroups:
-  - greatsql.greatsql.cn
+  - database.greatsql.cn
   resources:
-  - singleinstances/status
+  - standalones/status
   verbs:
   - get
   - patch

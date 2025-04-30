@@ -34,7 +34,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
@@ -48,7 +48,7 @@ func init() {
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(greatsqlv1.AddToScheme(scheme))
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -133,13 +133,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.SingleInstanceReconciler{
+	if err = (&controller.StandaloneReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
-		Log:           ctrl.Log.WithName("controllers").WithName("SingleInstance"),
-		EventRecorder: mgr.GetEventRecorderFor("SingleInstance"),
+		Log:           ctrl.Log.WithName("controllers").WithName("Standalone"),
+		EventRecorder: mgr.GetEventRecorderFor("Standalone"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SingleInstance")
+		setupLog.Error(err, "unable to create controller", "controller", "Standalone")
 		os.Exit(1)
 	}
 	if err = (&controller.GroupReplicationClusterReconciler{
@@ -152,7 +152,7 @@ func main() {
 		os.Exit(1)
 	}
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = (&greatsqlv1.GroupReplicationCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		if err = (&v1alpha1.GroupReplicationCluster{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Info("webhook is not enbled")
 			setupLog.Error(err, "unable to create webhook", "webhook", "GroupReplicationCluster")
 			os.Exit(1)

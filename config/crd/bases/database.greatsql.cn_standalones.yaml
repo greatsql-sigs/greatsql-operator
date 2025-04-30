@@ -4,37 +4,37 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: singleinstances.greatsql.greatsql.cn
+  name: standalones.database.greatsql.cn
 spec:
-  group: greatsql.greatsql.cn
+  group: database.greatsql.cn
   names:
-    kind: SingleInstance
-    listKind: SingleInstanceList
-    plural: singleinstances
-    singular: singleinstance
+    kind: Standalone
+    listKind: StandaloneList
+    plural: standalones
+    singular: standalone
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The access point of the SingleInstance
+    - description: The access point of the Standalone
       jsonPath: .status.state
       name: State
       type: string
-    - description: The size of the SingleInstance
+    - description: The size of the Standalone
       jsonPath: .spec.size
       name: Size
       type: integer
-    - description: The ready of the SingleInstance
+    - description: The ready of the Standalone
       jsonPath: .status.ready
       name: Ready
       type: integer
-    - description: The age of the SingleInstance
+    - description: The age of the Standalone
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SingleInstance is the Schema for the singles API
+        description: Standalone is the Schema for the singles API
         properties:
           apiVersion:
             description: |-
@@ -54,7 +54,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SingleInstance defines the desired state of SingleInstance
+            description: Standalone defines the desired state of Standalone
             properties:
               annotations:
                 additionalProperties:
@@ -1445,7 +1445,7 @@ spec:
                 type: object
             type: object
           status:
-            description: SingleInstanceStatus defines the observed state of SingleInstance
+            description: StandaloneStatus defines the observed state of Standalone
             properties:
               age:
                 type: string

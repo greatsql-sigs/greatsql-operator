@@ -19,7 +19,7 @@ kubectl get pods -n greatsql-system
 ### 部署示例
 ```sh
 # 部署单实例 GreatSQL
-kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/single/singleinstance.yaml
+kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/single/Standalone.yaml
 
 # 部署组复制集群
 kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/cluster/groupreplicationcluster.yaml
@@ -47,7 +47,7 @@ helm uninstall greatsql -n greatsql-system
 kubectl delete ns greatsql-system
 
 # 卸载 CRD
-kubectl delete crd singleinstances.greatsql.io
+kubectl delete crd Standalones.greatsql.io
 kubectl delete crd groupreplicationclusters.greatsql.io
 
 # 卸载 webhook

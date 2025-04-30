@@ -3,7 +3,7 @@ package kube
 import (
 	"fmt"
 
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +21,7 @@ import (
  */
 
 // NewDeployment returns a new deployment
-func NewDeployment(configMapName string, cr *greatsqlv1.SingleInstance, ordinal int) *appsv1.Deployment {
+func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *appsv1.Deployment {
 	labels := map[string]string{
 		consts.AppKubernetesName:     cr.Name,
 		consts.AppKubernetesInstance: cr.Name,
@@ -45,9 +45,9 @@ func NewDeployment(configMapName string, cr *greatsqlv1.SingleInstance, ordinal 
 			Namespace: cr.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(cr, schema.GroupVersionKind{
-					Group:   greatsqlv1.GroupVersion.Group,
-					Version: greatsqlv1.GroupVersion.Version,
-					Kind:    consts.SingleInstance,
+					Group:   v1alpha1.GroupVersion.Group,
+					Version: v1alpha1.GroupVersion.Version,
+					Kind:    consts.Standalone,
 				}),
 			},
 			Labels: labels,

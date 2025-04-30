@@ -1,11 +1,11 @@
-apiVersion: greatsql.greatsql.cn/v1
-kind: SingleInstance
+apiVersion: database.greatsql.cn/v1
+kind: Standalone
 metadata:
   labels:
     app.kubernetes.io/name: greatsql
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: greatsql
-  name: greatsql-single
+  name: greatsql-standalone
   namespace: greatsql
 spec:
   size: 1
@@ -68,12 +68,12 @@ spec:
           storage: 5Gi
     dnsPolicy: ClusterFirst
   labels:
-    app.kubernetes.io/name: greatsql-single
+    app.kubernetes.io/name: greatsql-standalone
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
     service.beta.kubernetes.io/aws-load-balancer-internal: external
   selector:
-      app.kubernetes.io/name: greatsql-single
+      app.kubernetes.io/name: greatsql-standalone
   ports:
       - name: mysql
         protocol: TCP

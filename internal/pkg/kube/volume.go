@@ -3,7 +3,7 @@ package kube
 import (
 	"fmt"
 
-	greatsqlv1 "github.com/greatsql-sigs/greatsql-operator/api/v1"
+	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,7 +18,7 @@ import (
  */
 
 // NewPersistentVolumeClaim returns a new persistent volume claim
-func NewPersistentVolumeClaim(name, namespace string, cr *greatsqlv1.PodSpec) *corev1.PersistentVolumeClaim {
+func NewPersistentVolumeClaim(name, namespace string, cr *v1alpha1.PodSpec) *corev1.PersistentVolumeClaim {
 
 	defaultStorage := *setDefaultStorage(cr)
 	storageQuantity := defaultStorage.String()
@@ -48,7 +48,7 @@ func NewPersistentVolumeClaim(name, namespace string, cr *greatsqlv1.PodSpec) *c
 }
 
 // setDefaultStorage set default storage
-func setDefaultStorage(cr *greatsqlv1.PodSpec) *resource.Quantity {
+func setDefaultStorage(cr *v1alpha1.PodSpec) *resource.Quantity {
 	storageQuantity := resource.NewQuantity(cr.PersistentVolumeClaimTemplate.Resources.Requests.Storage().Value(), resource.BinarySI)
 	if storageQuantity == nil || storageQuantity.Value() <= 0 {
 		storageQuantity = resource.NewQuantity(5, resource.BinarySI)

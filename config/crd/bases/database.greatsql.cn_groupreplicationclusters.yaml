@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: groupreplicationclusters.greatsql.greatsql.cn
+  name: groupreplicationclusters.database.greatsql.cn
 spec:
-  group: greatsql.greatsql.cn
+  group: database.greatsql.cn
   names:
     kind: GroupReplicationCluster
     listKind: GroupReplicationClusterList
@@ -14,7 +14,24 @@ spec:
     singular: groupreplicationcluster
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: The access point of the GroupReplicationCluster
+      jsonPath: .status.state
+      name: State
+      type: string
+    - description: The size of the GroupReplicationCluster
+      jsonPath: .spec.size
+      name: Size
+      type: integer
+    - description: The ready of the GroupReplicationCluster
+      jsonPath: .status.ready
+      name: Ready
+      type: integer
+    - description: The age of the GroupReplicationCluster
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: GroupReplicationCluster is the Schema for the GroupReplicationClusters
