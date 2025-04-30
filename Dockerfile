@@ -31,8 +31,8 @@ RUN make build
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 # registry.cn-chengdu.aliyuncs.com/gcr-distroless/static China mirror of distroless image.
-# FROM gcr.io/distroless/static:nonroot
-FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot
+# FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
 # FROM registry.cn-beijing.aliyuncs.com/greatsql/static:nonroot
 WORKDIR /
 COPY --from=builder /app/greatsql-controller-manager .
