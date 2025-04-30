@@ -1,6 +1,6 @@
 # Build the manager binary
-FROM registry.cn-beijing.aliyuncs.com/greatsql/golang:1.23 AS builder
-# FROM golang:1.23 AS builder
+# FROM registry.cn-beijing.aliyuncs.com/greatsql/golang:1.23 AS builder
+FROM golang:1.24.2 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
