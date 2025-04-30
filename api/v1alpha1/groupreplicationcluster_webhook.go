@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -38,9 +37,7 @@ func (r *GroupReplicationCluster) SetupWebhookWithManager(mgr ctrl.Manager) erro
 
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-//+kubebuilder:webhook:path=/mutate-database-greatsql-cn-v1-groupreplicationcluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=create;update,versions=v1,name=mgroupreplicationcluster.kb.io,admissionReviewVersions=v1
-
-var _ webhook.Defaulter = &GroupReplicationCluster{}
+//+kubebuilder:webhook:path=/mutate-database-greatsql-cn-v1alpha1-groupreplicationcluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=create;update,versions=v1alpha1,name=mgroupreplicationcluster.kb.io,admissionReviewVersions=v1alpha1
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *GroupReplicationCluster) Default() {
@@ -63,9 +60,7 @@ func (r *GroupReplicationCluster) Default() {
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-database-greatsql-cn-v1-groupreplicationcluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=create;update,versions=v1,name=vgroupreplicationcluster.kb.io,admissionReviewVersions=v1
-
-var _ webhook.Validator = &GroupReplicationCluster{}
+//+kubebuilder:webhook:path=/validate-database-greatsql-cn-v1alpha1-groupreplicationcluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=create;update,versions=v1alpha1,name=vgroupreplicationcluster.kb.io,admissionReviewVersions=v1alpha1
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *GroupReplicationCluster) ValidateCreate() (admission.Warnings, error) {
