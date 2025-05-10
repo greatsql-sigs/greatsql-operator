@@ -63,8 +63,3 @@ const (
 	// original text: GreatSQL@2024
 	ReplicationChannelPassword string = "R3JlYXRTUUxAMjAyNA=="
 )
-
-const (
-	// GreatSqlFinalizer is the finalizer name for the GreatSql
-	GreatSqlFinalizer string = "database.greatsql.cn"
-)

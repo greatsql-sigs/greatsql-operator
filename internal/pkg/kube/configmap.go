@@ -5,16 +5,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-03-18 17:09:59
- * @file: configmap.go
- * @description: kubenetes configmap operation
- */
-
-// ConfigMap returns a ConfigMap object
-func NewConfigMap(name, namespace, key, value string) *corev1.ConfigMap {
-
+// BuildConfigMap 构建 ConfigMap
+func BuildConfigMap(name, namespace, key, value string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",

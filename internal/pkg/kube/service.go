@@ -5,16 +5,36 @@ import (
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-03-18 17:06:11
- * @file: service.go
- * @description: kubenetes service operation
- */
+func BuildServices(name, nameSpace string, service v1alpha1.ServiceExpose) *corev1.Service {
+	// 设置默认端口
+	ports := service.Ports
+	if len(ports) == 0 {
+		ports = []corev1.ServicePort{
+			{
+				Name:       "mysql",
+				Port:       3306,
+				TargetPort: intstr.FromInt(3306),
+				Protocol:   corev1.ProtocolTCP,
+			},
+		}
+	}
 
-func NewService(name, nameSpace string, service v1alpha1.ServiceExpose) *corev1.Service {
+	// 设置默认选择器
+	selector := service.Selector
+	if selector == nil {
+		selector = map[string]string{
+			consts.AppKubernetesName: name,
+		}
+	}
+
+	// 设置默认服务类型
+	serviceType := service.Type
+	if serviceType == "" {
+		serviceType = corev1.ServiceTypeClusterIP
+	}
 
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -30,9 +50,9 @@ func NewService(name, nameSpace string, service v1alpha1.ServiceExpose) *corev1.
 			Annotations: service.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Type:              service.Type,
-			Ports:             service.Ports,
-			Selector:          service.Selector,
+			Type:              serviceType,
+			Ports:             ports,
+			Selector:          selector,
 			LoadBalancerClass: service.LoadBalancerClass,
 		},
 	}

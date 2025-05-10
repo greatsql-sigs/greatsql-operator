@@ -1,142 +1,81 @@
 package kube
 
 import (
-	"github.com/pkg/errors"
+	"time"
 
-	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-07-27 20:29:25
- * @file: Informer.go
- * @description: Informer
- *
- */
-
-// EventHandlerFunc 事件处理函数
-type EventHandlerFunc struct {
-	UpdateFunc func(oldObj, newObj interface{})
-	// DeleteFunc func(obj interface{})
-	Log logr.Logger
+// InformerFactory encapsulates shared informer factories for both typed and dynamic clients
+type InformerFactory struct {
+	TypedFactory   informers.SharedInformerFactory
+	DynamicFactory dynamicinformer.DynamicSharedInformerFactory
+	StopCh         chan struct{}
 }
 
-// informerUpdate Informer更新
-func informerUpdate[T any](informerFunc func() cache.SharedIndexInformer,
-	eventHandlers EventHandlerFunc) cache.SharedIndexInformer {
-
-	informer := informerFunc()
-	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: eventHandlers.UpdateFunc,
-	}); err != nil {
-		panic(err)
+// NewInformerFactory initializes a new InformerFactory
+func NewInformerFactory(config *rest.Config, resyncPeriod time.Duration) (*InformerFactory, error) {
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
 	}
-	return informer
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &InformerFactory{
+		TypedFactory:   informers.NewSharedInformerFactory(clientset, resyncPeriod),
+		DynamicFactory: dynamicinformer.NewDynamicSharedInformerFactory(dynamicClient, resyncPeriod),
+		StopCh:         make(chan struct{}),
+	}, nil
 }
 
-// PodInformer Pod Informer
-func (e *EventHandlerFunc) PodInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-	return informerUpdate[corev1.Pod](factory.Core().V1().Pods().Informer, EventHandlerFunc{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldPod := oldObj.(*corev1.Pod)
-			newPod := newObj.(*corev1.Pod)
-			if oldPod.Status.ContainerStatuses[0].RestartCount != newPod.Status.ContainerStatuses[0].RestartCount {
-				e.Log.Info("Pod %s has been restarted. Restart count: %d", newPod.Name, newPod.Status.ContainerStatuses[0].RestartCount)
-			}
-		},
-	})
+// Start begins the informer factories
+func (f *InformerFactory) Start() {
+	f.TypedFactory.Start(f.StopCh)
+	f.DynamicFactory.Start(f.StopCh)
 }
 
-// DeploymentInformer Deployment Informer
-func (e *EventHandlerFunc) DeploymentInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-	return informerUpdate[appsv1.Deployment](factory.Apps().V1().Deployments().Informer, EventHandlerFunc{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			handleReplicaChange[appsv1.Deployment](oldObj, newObj, "Deployment")
-		},
-	})
+// Stop stops the informer factories
+func (f *InformerFactory) Stop() {
+	close(f.StopCh)
 }
 
-// StatefulSetInformer StatefulSet Informer
-func (e *EventHandlerFunc) StatefulSetInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-	return informerUpdate[appsv1.StatefulSet](factory.Apps().V1().StatefulSets().Informer, EventHandlerFunc{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			handleReplicaChange[appsv1.StatefulSet](oldObj, newObj, "StatefulSet")
-		},
-	})
+// GetTypedInformer returns a typed informer for the specified resource
+func (f *InformerFactory) GetTypedInformer(resource string) cache.SharedIndexInformer {
+	switch resource {
+	case "pods":
+		return f.TypedFactory.Core().V1().Pods().Informer()
+	case "statefulsets":
+		return f.TypedFactory.Apps().V1().StatefulSets().Informer()
+	case "services":
+		return f.TypedFactory.Core().V1().Services().Informer()
+	case "configmaps":
+		return f.TypedFactory.Core().V1().ConfigMaps().Informer()
+	case "secrets":
+		return f.TypedFactory.Core().V1().Secrets().Informer()
+	case "pv":
+		return f.TypedFactory.Core().V1().PersistentVolumes().Informer()
+	case "pvc":
+		return f.TypedFactory.Core().V1().PersistentVolumeClaims().Informer()
+	case "cronjobs":
+		return f.TypedFactory.Batch().V1beta1().CronJobs().Informer()
+	case "jobs":
+		return f.TypedFactory.Batch().V1().Jobs().Informer()
+	default:
+		return nil
+	}
 }
 
-// SecretInformer Secret Informer
-func (e *EventHandlerFunc) SecretInformer(factory informers.SharedInformerFactory, onUpdate func(oldSecret, newSecret *corev1.Secret)) (cache.SharedIndexInformer, error) {
-	return informerUpdate[corev1.Secret](factory.Core().V1().Secrets().Informer, EventHandlerFunc{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldSecret := oldObj.(*corev1.Secret)
-			newSecret := newObj.(*corev1.Secret)
-
-			oldKey, err := cache.MetaNamespaceKeyFunc(oldSecret)
-			if err != nil {
-				errors.Wrapf(err, "error getting key for old secret")
-				return
-			}
-			newKey, err := cache.MetaNamespaceKeyFunc(newSecret)
-			if err != nil {
-				errors.Wrapf(err, "error getting key for new secret")
-				return
-			}
-
-			if oldKey != newKey {
-				e.Log.Info("Secret key has been changed from %s to %s", oldKey, newKey)
-			}
-
-			if oldSecret.ResourceVersion != newSecret.ResourceVersion {
-				onUpdate(oldSecret, newSecret)
-				e.Log.Info("Secret %s has been updated. ResourceVersion: %s", newSecret.Name, newSecret.ResourceVersion)
-			}
-		},
-	}), nil
+// GetDynamicInformer returns a dynamic informer for the specified GroupVersionResource
+func (f *InformerFactory) GetDynamicInformer(gvr schema.GroupVersionResource) cache.SharedIndexInformer {
+	return f.DynamicFactory.ForResource(gvr).Informer()
 }
-
-// PersistentVolumeClaimInformer PersistentVolumeClaim Informer
-func (e *EventHandlerFunc) PersistentVolumeClaimInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-	return informerUpdate[corev1.PersistentVolumeClaim](factory.Core().V1().PersistentVolumeClaims().Informer, EventHandlerFunc{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldPVC := oldObj.(*corev1.PersistentVolumeClaim)
-			newPVC := newObj.(*corev1.PersistentVolumeClaim)
-
-			if oldPVC.Status.Phase != newPVC.Status.Phase {
-				e.Log.Info("PVC %s has been updated. Phase: %s", newPVC.Name, newPVC.Status.Phase)
-			}
-		},
-	})
-}
-
-// StandaloneInformer Standalone Informer
-// Custom Resource Definition Informer
-// func StandaloneInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-// 	return informerUpdate[v1.Standalone](factory.Core().V1().Pods().Informer, EventHandlerFunc{
-// 		UpdateFunc: func(oldObj, newObj interface{}) {
-// 			oldPod := oldObj.(*v1.Standalone)
-// 			newPod := newObj.(*v1.Standalone)
-// 			if oldPod.Status.Replicas != newPod.Status.Replicas {
-// 				fmt.Printf("Instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
-// 			}
-// 		},
-// 	})
-// }
-
-// GroupReplicationClusterInformer GroupReplicationCluster Informer
-// Custom Resource Definition Informer
-// func GroupReplicationClusterInformer(factory informers.SharedInformerFactory) cache.SharedIndexInformer {
-// 	return informerUpdate[v1.GroupReplicationCluster](factory.Core().V1().Pods().Informer, EventHandlerFunc{
-// 		UpdateFunc: func(oldObj, newObj interface{}) {
-// 			oldPod := oldObj.(*v1.GroupReplicationCluster)
-// 			newPod := newObj.(*v1.GroupReplicationCluster)
-// 			if oldPod.Status.Replicas != newPod.Status.Replicas {
-// 				fmt.Printf("Cluster instance %s has been restarted. Restart count: %d\n", newPod.Name, newPod.Status.Replicas)
-// 			}
-// 		},
-// 	})
-// }

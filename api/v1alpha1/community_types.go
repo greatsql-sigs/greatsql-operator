@@ -31,28 +31,16 @@ import (
  * @file: community_types.go
  * @description: common types
  */
-
-// Category defines the type of the GreatSql
-// Supported values are "Standalone" "GroupReplicationCluster"
-// Standalone: Standalone instance of GreatSql
-// TODO: ReplicaofCluster: Master-slave replication cluster
-// GroupReplicationCluster: GroupReplicationCluster of a GreatSql cluster(MGR)
-// type Category string
-
-// const (
-// 	StandaloneCategory          Category = "Standalone"
-// 	ReplicaofClusterCategory        Category = "ReplicaofCluster"
-// 	GroupReplicationClusterCategory Category = "GroupReplicationCluster"
-// )
-
+// MemberRole defines the role of the member
 type MemberRole string
 
 const (
 	PrimaryRole    MemberRole = "primary"
-	SencondaryRole MemberRole = "sencondary"
+	SecondaryRole  MemberRole = "secondary"
 	ArbitratorRole MemberRole = "arbitrator"
 )
 
+// State defines the state of the member
 type State string
 
 const (
@@ -111,20 +99,30 @@ type MetricsCollection struct {
 
 // PodSpec defines the desired state of Pod
 type PodSpec struct {
-	Affinity                      *PodAffinity                      `json:"affinity,omitempty"` // pod affinity(pod亲和性)
-	Annotation                    map[string]string                 `json:"annotation,omitempty"`
-	Labels                        map[string]string                 `json:"labels,omitempty"`
-	NodeSelector                  map[string]string                 `json:"nodeSelector,omitempty"`
-	Tolerations                   []corev1.Toleration               `json:"tolerations,omitempty"`                   //schedule tolerations
-	TerminationGracePeriodSeconds *int64                            `json:"terminationGracePeriodSeconds,omitempty"` // 在规定时间内停止pod，俗称 优雅停机
-	SchedulerName                 string                            `json:"schedulerName,omitempty"`
-	PodSecurityContext            *corev1.PodSecurityContext        `json:"podSecurityContext,omitempty"`
-	ServiceAccountName            string                            `json:"serviceAccountName,omitempty"`
-	ServiceName                   string                            `json:"serviceName,omitempty"`
-	Version                       string                            `json:"version,omitempty"`
-	Containers                    []ContainerSpec                   `json:"containers,omitempty"` // container spec
-	PersistentVolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimTemplate,omitempty"`
-	DnsPolicy                     corev1.DNSPolicy                  `json:"dnsPolicy,omitempty"`
+	Affinity                      *PodAffinity               `json:"affinity,omitempty"` // pod affinity(pod亲和性)
+	Annotation                    map[string]string          `json:"annotation,omitempty"`
+	Labels                        map[string]string          `json:"labels,omitempty"`
+	NodeSelector                  map[string]string          `json:"nodeSelector,omitempty"`
+	Tolerations                   []corev1.Toleration        `json:"tolerations,omitempty"`                   //schedule tolerations
+	TerminationGracePeriodSeconds *int64                     `json:"terminationGracePeriodSeconds,omitempty"` // 在规定时间内停止pod，俗称 优雅停机
+	SchedulerName                 string                     `json:"schedulerName,omitempty"`
+	PodSecurityContext            *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	ServiceAccountName            string                     `json:"serviceAccountName,omitempty"`
+	ServiceName                   string                     `json:"serviceName,omitempty"`
+	Version                       string                     `json:"version,omitempty"`
+	Containers                    []ContainerSpec            `json:"containers,omitempty"` // container spec
+	Volumes                       []Volume                   `json:"volumes,omitempty"`
+	// PersistentVolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimTemplate,omitempty"`
+	DnsPolicy corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
+}
+
+type Volume struct {
+	Name         string                              `json:"name"`
+	VolumeSource corev1.VolumeSource                 `json:"volumeSource"`
+	VolumeMounts []corev1.VolumeMount                `json:"volumeMounts"`
+	StorageClass *string                             `json:"storageClass,omitempty"`
+	Size         *string                             `json:"size,omitempty"`
+	AccessModes  []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 }
 
 // TODO: not implemented yet

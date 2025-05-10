@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,10 +42,16 @@ import (
 // GroupReplicationClusterReconciler reconciles a GroupReplicationCluster object
 type GroupReplicationClusterReconciler struct {
 	client.Client
-	Scheme        *runtime.Scheme
-	Log           logr.Logger
-	EventRecorder record.EventRecorder
+	Scheme         *runtime.Scheme
+	Log            logr.Logger
+	EventRecorder  record.EventRecorder
+	ResourceHelper *kube.ResourceHelper
 }
+
+const (
+	// GreatSqlFinalizer is the finalizer name for the GreatSql
+	groupReplicationClusterFinalizer string = "finalizer.groupreplicationcluster.database.greatsql.cn"
+)
 
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/status,verbs=get;update;patch
@@ -72,6 +79,10 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if err := r.handleFinalizer(ctx, mgr); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	sts := &appsv1.StatefulSet{}
 	if err := r.Client.Get(ctx, req.NamespacedName, sts); err != nil {
 		if err := r.createResources(ctx, req, mgr); err != nil {
@@ -80,6 +91,38 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// handleFinalizer handles the finalizer of the GroupReplicationCluster
+func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1.GroupReplicationCluster) error {
+	log := r.Log.WithValues("groupreplicationcluster", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
+
+	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, groupReplicationClusterFinalizer, log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
+		// 删除 Service
+		svc := &corev1.Service{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
+			log.Error(err, "Failed to delete Service")
+			return err
+		}
+
+		// 删除 ConfigMap
+		cm := &corev1.ConfigMap{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
+			log.Error(err, "Failed to delete ConfigMap")
+			return err
+		}
+
+		// 删除 Secret
+		secret := &corev1.Secret{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, secret); err != nil {
+			log.Error(err, "Failed to delete Secret")
+			return err
+		}
+
+		// TODO: 删除 PVC?
+
+		return nil
+	})
 }
 
 // createResources creates the resources for the GroupReplicationCluster
@@ -102,7 +145,7 @@ func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context,
 		}
 
 		// Create PVC for each member
-		if err := r.createPersistentVolumeClaim(ctx, req, mgr, ordinal); err != nil {
+		if err := r.createPersistentVolumeClaim(ctx, mgr, ordinal); err != nil {
 			return err
 		}
 
@@ -201,31 +244,28 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 		return err
 	}
 
-	configMap := kube.NewConfigMap(configMapName, req.Namespace, "my.cnf", data)
-	if err := r.Client.Create(ctx, configMap); err != nil {
-		r.Log.Error(err, "Could not create configMap", "Name", configMapName)
-		return err
-	}
-	r.Log.Info("ConfigMap created successfully", "Name", configMapName, "Namespace", configMap.Namespace)
-	return nil
+	configMap := kube.BuildConfigMap(configMapName, req.Namespace, "my.cnf", data)
+	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, configMap)
 }
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
-	pvc := kube.NewPersistentVolumeClaim(req.Name, req.Namespace, mgr.Spec.ClusterSpec.PodSpec)
-	pvc.Name = fmt.Sprintf("%s-%s-%d", req.Name, consts.DB, ordinal)
-	if err := r.Client.Create(ctx, pvc); err != nil {
+func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
+	pvc, err := kube.BuildPersistentVolumeClaim(mgr, corev1.ReadWriteOnce, kube.DefaultPersistentVolumeClaimSize, nil)
+	if err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaim")
 		return err
 	}
-	r.Log.Info("Create persistentVolumeClaim is successful", "Name", pvc.Name, "Namespace", pvc.Namespace)
-	return nil
+	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, &pvc)
 }
 
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
-	sts := kube.NewStatefulSet(configMapName, fmt.Sprintf("%s-headless", req.Name), mgr, ordinal)
+	sts, err := kube.BuildStatefulSet(mgr, configMapName, fmt.Sprintf("%s-headless", req.Name), ordinal, nil, nil)
+	if err != nil {
+		r.Log.Error(err, "Could not create statefulSet")
+		return err
+	}
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
 		corev1.ContainerPort{
 			Name:          consts.MgrCommunicaName,
@@ -250,15 +290,10 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 
 // createService creates a Service for the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	service := kube.NewService(req.Name, req.Namespace, mgr.Spec.ClusterSpec.ServiceExpose)
+	service := kube.BuildServices(req.Name, req.Namespace, mgr.Spec.ClusterSpec.ServiceExpose)
 	service.Name = fmt.Sprintf("%s-headless", req.Name)
 	service.Spec.ClusterIP = corev1.ClusterIPNone
-	if err := r.Client.Create(ctx, service); err != nil {
-		r.Log.Error(err, "Could not create service")
-		return err
-	}
-	r.Log.Info("Create service is successful", "Name", service.Name, "Namespace", service.Namespace)
-	return nil
+	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
 }
 
 // initializeCluster initializes the GroupReplicationCluster
@@ -322,6 +357,10 @@ func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.Grou
 		name string
 		fn   func() error
 	}{
+		{"create replication user", func() error {
+			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+		}},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
 		{"wait for primary", func() error { return mysql.WaitForPrimaryAvailable(primaryHost, 300) }},
 		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
 		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},

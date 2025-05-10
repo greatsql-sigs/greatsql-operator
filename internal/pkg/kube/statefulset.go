@@ -2,58 +2,100 @@ package kube
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 
-	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
-	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-03-18 22:43:46
- * @file: statefulset.go
- * @description: statefulset operation
- */
+type VolumeBuilderFunc func(cr interface{}) ([]corev1.Volume, error)
+type VolumeMountBuilderFunc func(cr interface{}) ([]corev1.VolumeMount, error)
 
-func NewStatefulSet(configMapName, serviceName string, cr *v1alpha1.GroupReplicationCluster, ordinal int) *appsv1.StatefulSet {
+// BuildStatefulSet 通用的 StatefulSet
+func BuildStatefulSet(
+	cr interface{}, configMapName, serviceName string, ordinal int,
+	volumeBuilder VolumeBuilderFunc,
+	volumeMountBuilder VolumeMountBuilderFunc,
+) (*appsv1.StatefulSet, error) {
 
-	labels := map[string]string{
-		consts.AppKubernetesName:     cr.Name,
-		consts.AppKubernetesInstance: cr.Name,
+	crValue := reflect.ValueOf(cr)
+	crType := reflect.TypeOf(cr)
+
+	if crType.Kind() != reflect.Ptr || crValue.IsNil() {
+		return nil, fmt.Errorf("cr must be a non-nil pointer")
 	}
-	affinity := cr.PodAffinity(labels)
+
+	crElem := crValue.Elem()
+	//crElemType := crElem.Type()
+
+	// 获取 metadata.name 和 metadata.namespace
+	metadataField := crElem.FieldByName("ObjectMeta")
+	if !metadataField.IsValid() {
+		return nil, fmt.Errorf("ObjectMeta field not found in CR")
+	}
+	metadata := metadataField.Interface().(metav1.ObjectMeta)
+	name := metadata.Name
+	namespace := metadata.Namespace
+
+	// 获取 replicas 数量
+	specField := crElem.FieldByName("Spec")
+	if !specField.IsValid() {
+		return nil, fmt.Errorf("spec field not found in CR")
+	}
 
 	replicas := int32(0)
-	for _, member := range cr.Spec.Member {
-		if member.Size != nil {
-			replicas += *member.Size
+	specValue := specField
+	memberField := specValue.FieldByName("Member")
+	if memberField.IsValid() && memberField.Kind() == reflect.Slice {
+		for i := 0; i < memberField.Len(); i++ {
+			member := memberField.Index(i)
+			sizeField := member.FieldByName("Size")
+			if sizeField.IsValid() && !sizeField.IsNil() {
+				size := sizeField.Elem().Int()
+				replicas += int32(size)
+			}
 		}
 	}
 
-	return &appsv1.StatefulSet{
+	labels := map[string]string{
+		"app.kubernetes.io/name":     name,
+		"app.kubernetes.io/instance": name,
+	}
+
+	volumes, err := volumeBuilder(cr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build volumes: %v", err)
+	}
+
+	volumeMounts, err := volumeMountBuilder(cr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build volumeMounts: %v", err)
+	}
+
+	// 构建 StatefulSet
+	sts := &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
 			Kind:       "StatefulSet",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name,
-			Namespace: cr.Namespace,
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cr, schema.GroupVersionKind{
-					Group:   v1alpha1.GroupVersion.Group,
-					Version: v1alpha1.GroupVersion.Version,
-					Kind:    consts.GroupReplicationCluster,
-				}),
+				{
+					APIVersion: crType.String(),
+					Kind:       crType.String(),
+					Name:       name,
+				},
 			},
-			Labels: labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: &replicas,
-			//Replicas:    cr.Spec.Member[0].Size,
+			Replicas:    &replicas,
 			ServiceName: serviceName,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
@@ -63,60 +105,63 @@ func NewStatefulSet(configMapName, serviceName string, cr *v1alpha1.GroupReplica
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					Containers:                    NewContainers(cr.Name, cr.Spec.ClusterSpec.PodSpec, ordinal, true),
-					TerminationGracePeriodSeconds: cr.Spec.ClusterSpec.PodSpec.TerminationGracePeriodSeconds,
-					SchedulerName:                 cr.Spec.ClusterSpec.PodSpec.SchedulerName,
-					Affinity:                      affinity,
-					ServiceAccountName:            cr.Spec.ClusterSpec.PodSpec.ServiceAccountName,
-					SecurityContext:               cr.Spec.ClusterSpec.PodSpec.PodSecurityContext,
-					NodeSelector:                  cr.Spec.ClusterSpec.PodSpec.NodeSelector,
-					Tolerations:                   cr.Spec.ClusterSpec.PodSpec.Tolerations,
-					Volumes: []corev1.Volume{
+					Containers: []corev1.Container{
 						{
-							Name: fmt.Sprintf("%s-%s", cr.Name, consts.Config),
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: configMapName,
-									},
-									DefaultMode: &[]int32{0664}[0],
-								},
-							},
-						},
-						{
-							//Name: cr.Name + consts.DB,
-							// VolumeSource: corev1.VolumeSource{
-							// 	PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							// 		ClaimName: cr.Name + consts.DB + strconv.Itoa(ordinal),
-							// 	},
-							// },
+							Name:            name,
+							Image:           crElem.FieldByName("Image").String(),
+							ImagePullPolicy: corev1.PullPolicy(crElem.FieldByName("ImagePullPolicy").String()),
+							Env:             crElem.FieldByName("Env").Interface().([]corev1.EnvVar),
+							VolumeMounts:    volumeMounts,
+							Resources:       crElem.FieldByName("Resources").Interface().(corev1.ResourceRequirements),
+							StartupProbe:    crElem.FieldByName("StartupProbe").Interface().(*corev1.Probe),
+							ReadinessProbe:  crElem.FieldByName("ReadinessProbe").Interface().(*corev1.Probe),
+							LivenessProbe:   crElem.FieldByName("LivenessProbe").Interface().(*corev1.Probe),
+							SecurityContext: crElem.FieldByName("SecurityContext").Interface().(*corev1.SecurityContext),
 						},
 					},
-					DNSPolicy: cr.Spec.ClusterSpec.PodSpec.DnsPolicy,
+					TerminationGracePeriodSeconds: &[]int64{int64(crElem.FieldByName("TerminationGracePeriodSeconds").Int())}[0],
+					SchedulerName:                 crElem.FieldByName("SchedulerName").String(),
+					ServiceAccountName:            crElem.FieldByName("ServiceAccountName").String(),
+					SecurityContext:               crElem.FieldByName("SecurityContext").Interface().(*corev1.PodSecurityContext),
+					NodeSelector:                  crElem.FieldByName("NodeSelector").Interface().(map[string]string),
+					Tolerations:                   crElem.FieldByName("Tolerations").Interface().([]corev1.Toleration),
+					Volumes:                       volumes,
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:   cr.Name + consts.DB + strconv.Itoa(ordinal),
+						Name:   name + "-data-" + strconv.Itoa(ordinal),
 						Labels: labels,
 					},
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources:        cr.Spec.ClusterSpec.PodSpec.PersistentVolumeClaimTemplate.Resources,
-						StorageClassName: cr.Spec.ClusterSpec.PodSpec.PersistentVolumeClaimTemplate.StorageClassName,
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: resource.MustParse(DefaultPersistentVolumeClaimSize),
+							},
+						},
+						StorageClassName: func() *string {
+							s := crElem.FieldByName("StorageClassName").String()
+							return &s
+						}(),
 					},
 				},
 			},
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type: cr.Spec.ClusterSpec.UpdateStrategy.Type,
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
-					Partition:      cr.Spec.ClusterSpec.UpdateStrategy.RolelingUpdate.Partition,
-					MaxUnavailable: cr.Spec.ClusterSpec.UpdateStrategy.RolelingUpdate.MaxUnavailable,
+					Partition: func() *int32 { p := int32(0); return &p }(),
+					MaxUnavailable: func() *intstr.IntOrString {
+						val := intstr.FromInt(1)
+						return &val
+					}(),
 				},
 			},
 		},
 	}
+
+	return sts, nil
 }

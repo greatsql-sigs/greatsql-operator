@@ -61,7 +61,6 @@ func init() {
 //		 handleVersionFlag 处理版本号
 
 func main() {
-
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -151,13 +150,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "GroupReplicationCluster")
 		os.Exit(1)
 	}
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = (&v1alpha1.GroupReplicationCluster{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Info("webhook is not enbled")
-			setupLog.Error(err, "unable to create webhook", "webhook", "GroupReplicationCluster")
-			os.Exit(1)
-		}
-	}
+	// if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+	// 	if err = (&v1alpha1.GroupReplicationCluster{}).SetupWebhookWithManager(mgr); err != nil {
+	// 		setupLog.Info("webhook is not enbled")
+	// 		setupLog.Error(err, "unable to create webhook", "webhook", "GroupReplicationCluster")
+	// 		os.Exit(1)
+	// 	}
+	// }
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

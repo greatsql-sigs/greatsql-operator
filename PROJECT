@@ -10,25 +10,21 @@ projectName: greatsql
 repo: github.com/greatsql-sigs/greatsql-operator
 resources:
 - api:
-    crdVersion: v1
+    crdVersion: v1alpha1
     namespaced: true
   controller: true
   domain: greatsql.cn
   group: database
   kind: Standalone
-  path: github.com/greatsql-sigs/greatsql-operator/api/v1
+  path: github.com/greatsql-sigs/greatsql-operator/api/v1alpha1
   version: v1alpha1
 - api:
-    crdVersion: v1
+    crdVersion: v1alpha1
     namespaced: true
   controller: true
   domain: greatsql.cn
   group: database
   kind: GroupReplicationCluster
-  path: github.com/greatsql-sigs/greatsql-operator/api/v1
+  path: github.com/greatsql-sigs/greatsql-operator/api/v1alpha1
   version: v1alpha1
-  webhooks:
-    defaulting: true
-    validation: true
-    webhookVersion: v1
 version: "3"
