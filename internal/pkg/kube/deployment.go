@@ -29,8 +29,8 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 	selector := &metav1.LabelSelector{MatchLabels: labels}
 	var affinity *corev1.Affinity
 
-	if cr.Spec.PodSpec.Affinity == nil {
-		cr.Spec.PodSpec.Affinity = nil
+	if cr.Spec.Pod.Affinity == nil {
+		cr.Spec.Pod.Affinity = nil
 	} else {
 		affinity = cr.PodAffinity(labels)
 	}
@@ -59,14 +59,14 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					Containers:                    NewContainers(cr.Name, &cr.Spec.PodSpec, ordinal, false),
-					TerminationGracePeriodSeconds: cr.Spec.PodSpec.TerminationGracePeriodSeconds,
-					SchedulerName:                 cr.Spec.PodSpec.SchedulerName,
+					Containers:                    NewContainers(cr.Name, &cr.Spec.Pod, ordinal, false),
+					TerminationGracePeriodSeconds: cr.Spec.Pod.TerminationGracePeriodSeconds,
+					SchedulerName:                 cr.Spec.Pod.SchedulerName,
 					Affinity:                      affinity,
-					ServiceAccountName:            cr.Spec.PodSpec.ServiceAccountName,
-					SecurityContext:               cr.Spec.PodSpec.PodSecurityContext,
-					NodeSelector:                  cr.Spec.PodSpec.NodeSelector,
-					Tolerations:                   cr.Spec.PodSpec.Tolerations,
+					ServiceAccountName:            cr.Spec.Pod.ServiceAccountName,
+					SecurityContext:               cr.Spec.Pod.PodSecurityContext,
+					NodeSelector:                  cr.Spec.Pod.NodeSelector,
+					Tolerations:                   cr.Spec.Pod.Tolerations,
 					Volumes: []corev1.Volume{
 						{
 							Name: fmt.Sprintf("%s-%s", cr.Name, consts.Config),
@@ -88,12 +88,12 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 							},
 						},
 					},
-					DNSPolicy: cr.Spec.PodSpec.DnsPolicy,
+					DNSPolicy: cr.Spec.Pod.DnsPolicy,
 				},
 			},
 			Selector: selector,
 			Strategy: appsv1.DeploymentStrategy{
-				Type: cr.Spec.UpdateStrategy,
+				Type: appsv1.DeploymentStrategyType(cr.Spec.UpdateStrategy.Type),
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
 					MaxUnavailable: &intstr.IntOrString{IntVal: 1},
 					MaxSurge:       &intstr.IntOrString{IntVal: 1},

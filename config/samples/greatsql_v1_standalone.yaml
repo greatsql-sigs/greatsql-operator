@@ -1,87 +1,86 @@
 apiVersion: database.greatsql.cn/v1alpha1
 kind: Standalone
 metadata:
+  name: greatsql-standalone
+  namespace: greatsql
   labels:
     app.kubernetes.io/name: greatsql
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: greatsql
-  name: greatsql-standalone
-  namespace: greatsql
+  annotations:
+
 spec:
   size: 1
-  podSpec:
-    affinity:
-      antiAffinityTopologyKey: "kubernetes.io/hostname"
-    annotation:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "3306"
-    labels:
-      app.kubernetes.io/name: greatsql
-    nodeSelector:
-      kubernetes.io/os: linux
-    tolerations:
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
-    terminationGracePeriodSeconds: 30
-    schedulerName: default-scheduler
-    podSecurityContext:
-      runAsUser: 0
-      runAsGroup: 0
-    serviceAccountName: default
-    version: "8.0.32-26"
-    containers:
-      - name: greatsql
-        image: "greatsql/greatsql:8.0.32-26"
-        imagePullPolicy: IfNotPresent
-        resources:
-          requests:
-            memory: "2Gi"
-            cpu: "2"
-          limits:
-            memory: "8Gi"
-            cpu: "4"
-        startupProbe:
-          tcpSocket:
-            port: 3306
-          initialDelaySeconds: 5
-          periodSeconds: 20
-        readinessProbe:
-          tcpSocket:
-            port: 3306
-          initialDelaySeconds: 5
-          periodSeconds: 20
-        livenessProbe:
-          tcpSocket:
-            port: 3306
-          initialDelaySeconds: 30
-          periodSeconds: 20
-        securityContext:
-          privileged: true
-        env:
-          - name: MYSQL_ROOT_PASSWORD
-            value: "GreatSQL@2024"
-    persistentVolumeClaimTemplate: 
-      storageClassName: ebs-gp3-sc
+  version: "8.0.32-26"
+  serviceAccountName: greatsql
+  serviceName: greatsql
+  containers:
+    - name: greatsql
+      image: greatsql/greatsql:8.0.32-26
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets:
+        - name: greatsql-secret
       resources:
         requests:
-          # default storage size is 5Gi
-          storage: 5Gi
-    dnsPolicy: ClusterFirst
-  labels:
-    app.kubernetes.io/name: greatsql-standalone
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: nlb
-    service.beta.kubernetes.io/aws-load-balancer-internal: external
-  selector:
-      app.kubernetes.io/name: greatsql-standalone
-  ports:
+          cpu: "2"
+          memory: "2Gi"
+      startupProbe:
+        tcpSocket:
+          port: 3306
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readinessProbe:
+        tcpSocket:
+          port: 3306
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: greatsql-secret
+              key: root-password
+  storages:
+    - name: greatsql-storage
+      storageClassName: ebs-gp3-sc
+      accessModes: ["ReadWriteOnce"]
+      volumeMode: Filesystem
+      size: "10Gi"
+  affinity:
+    antiAffinityTopologyKey: "kubernetes.io/hostname"
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations:
+    - key: node-role.kubernetes.io/master
+      effect: NoSchedule
+  schedulerName: default-scheduler
+  terminationGracePeriodSeconds: 30
+  podSecurityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  upgrade:
+    versionServiceEndpoint: ""
+    apply: ""
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+      maxUnavailable: 1
+  service:
+    type: LoadBalancer
+    ports:
       - name: mysql
         protocol: TCP
         port: 3306
-        targetPort: mysql
-  type: LoadBalancer
-  loadBalancerClass: "service.k8s.aws/nlb"
-  upgradeOptions:
-    versionServiceEndpoint: ""
-    apply: ""
-  updateStrategy: RollingUpdate
+    selector:
+      app: greatsql
+    loadBalancerClass: "service.k8s.aws/nlb"
+    annotations:
+      service.kubernetes.io/aws-load-balancer-type: nlb

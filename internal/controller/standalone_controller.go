@@ -138,12 +138,8 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 
 // createRequiredResources creates the required resources for the Standalone
 func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
-	if cr.Spec.PodSpec.Volumes == nil {
-		return fmt.Errorf("volumes is nil")
-	}
-
 	// 创建 Service
-	service := kube.BuildServices(req.Name, req.Namespace, cr.Spec.ServiceExpose)
+	service := kube.BuildServices(req.Name, req.Namespace, cr.Spec.Service)
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, service); err != nil {
 		r.Log.Error(err, "Could not create service")
 		return err
@@ -171,8 +167,8 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 	}
 
 	// 创建 PVC
-	size := cr.Spec.GetSize()
-	pvcs, err := kube.BuildPersistentVolumeClaims(cr, corev1.ReadWriteOnce, kube.DefaultPersistentVolumeClaimSize, nil, int(size))
+	size := cr.Spec.Size
+	pvcs, err := kube.BuildPersistentVolumeClaims(cr, corev1.ReadWriteOnce, kube.DefaultPersistentVolumeClaimSize, nil, int(*size))
 	if err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaims")
 		return err
@@ -189,7 +185,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 		var volumes []corev1.Volume
 
 		// 为每个容器创建对应的卷
-		for i, container := range standalone.Spec.PodSpec.Containers {
+		for i, container := range standalone.Spec.Pod.Containers {
 			volume := corev1.Volume{
 				Name: fmt.Sprintf("%s-%d", container.Name, i),
 				VolumeSource: corev1.VolumeSource{
@@ -209,14 +205,10 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 		var volumeMounts []corev1.VolumeMount
 
 		// 为每个容器创建对应的卷挂载
-		for i, container := range standalone.Spec.PodSpec.Containers {
+		for i, container := range standalone.Spec.Pod.Containers {
 			volumeMount := corev1.VolumeMount{
-				Name:             fmt.Sprintf("%s-%d", container.Name, i),
-				MountPath:        standalone.Spec.PodSpec.Volumes[0].VolumeMounts[0].MountPath,
-				SubPath:          standalone.Spec.PodSpec.Volumes[0].VolumeMounts[0].SubPath,
-				ReadOnly:         standalone.Spec.PodSpec.Volumes[0].VolumeMounts[0].ReadOnly,
-				MountPropagation: standalone.Spec.PodSpec.Volumes[0].VolumeMounts[0].MountPropagation,
-				SubPathExpr:      standalone.Spec.PodSpec.Volumes[0].VolumeMounts[0].SubPathExpr,
+				Name:      fmt.Sprintf("%s-%d", container.Name, i),
+				MountPath: "/data",
 			}
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
@@ -244,10 +236,12 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
 		return nil, nil
 	}
-
 	result := &v1alpha1.StandaloneStatus{
-		State: v1alpha1.StateInitializing,
+		Status: v1alpha1.Status{
+			Phase: v1alpha1.StateInitializing.String(),
+		},
 	}
+	result.Status.Ready = 0
 
 	deployList := &appsv1.DeploymentList{}
 	err := r.Client.List(ctx, deployList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
@@ -257,22 +251,22 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 
 	switch len(deployList.Items) {
 	case 0:
-		result.State = v1alpha1.StatePaused
+		result.Status.Phase = v1alpha1.StatePaused.String()
 		r.Log.Info("no deployment found")
 	case 1:
 		status := deployList.Items[0].Status
-		result.Ready = status.ReadyReplicas
+		result.Status.Ready = status.ReadyReplicas
 		r.Log.Info("got deployment status", "status", status)
-		result.State = determineState(status.ReadyReplicas)
+		result.Status.Phase = determineState(status.ReadyReplicas).String()
 	default:
 		r.Log.Info("too many deployments found", "count", len(deployList.Items))
-		result.State = v1alpha1.StateError
+		result.Status.Phase = v1alpha1.StateError.String()
 		return result, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
 	}
 
 	if !reflect.DeepEqual(cr.Status, *result) {
 		cr.Status = *result
-		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("GreatSQL status updated: %s", result.State))
+		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("GreatSQL status updated: %s", result.Status.Phase))
 		if err := r.Client.Status().Update(ctx, cr); err != nil {
 			r.Log.Error(err, "Could not update status")
 			return result, err

@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildServices(name, nameSpace string, service v1alpha1.ServiceExpose) *corev1.Service {
+func BuildServices(name, nameSpace string, service v1alpha1.Service) *corev1.Service {
 	// 设置默认端口
 	ports := service.Ports
 	if len(ports) == 0 {

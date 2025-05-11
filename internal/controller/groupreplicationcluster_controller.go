@@ -132,9 +132,9 @@ func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context,
 		return err
 	}
 
-	if err := r.createService(ctx, req, mgr); err != nil {
-		return err
-	}
+	// if err := r.createService(ctx, req, mgr); err != nil {
+	// 	return err
+	// }
 
 	// Create resources for each member
 	size := mgr.Spec.Member[0].GetSize()
@@ -289,12 +289,12 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 }
 
 // createService creates a Service for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	service := kube.BuildServices(req.Name, req.Namespace, mgr.Spec.ClusterSpec.ServiceExpose)
-	service.Name = fmt.Sprintf("%s-headless", req.Name)
-	service.Spec.ClusterIP = corev1.ClusterIPNone
-	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
-}
+// func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+// 	service := kube.BuildServices(req.Name, req.Namespace, mgr.Spec.ClusterSpec.)
+// 	service.Name = fmt.Sprintf("%s-headless", req.Name)
+// 	service.Spec.ClusterIP = corev1.ClusterIPNone
+// 	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
+// }
 
 // initializeCluster initializes the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {

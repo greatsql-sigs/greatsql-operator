@@ -57,30 +57,18 @@ func (s State) String() string {
 }
 
 type MySQLGroupReplicationCluster struct {
-	PodSpec        *PodSpec `json:"podSpec,omitempty"`
-	ServiceExpose  `json:",omitempty"`
-	UpgradeOptions UpgradeOptions                 `json:"upgradeOptions,omitempty"`
-	UpdateStrategy *StatefulSetUpdateStrategyType `json:"updateStrategy,omitempty"`
+	PodSpec *Pod `json:"podSpec,omitempty"`
+	// UpgradeOptions UpgradeOptions                 `json:"upgradeOptions,omitempty"`
+	UpdateStrategy *UpdateStrategy `json:"updateStrategy,omitempty"`
 	// Partition      *int32                         `json:"partition,omitempty"`
 	// MaxUnavailable *intstr.IntOrString            `json:"maxUnavailable,omitempty"`
-}
-
-type StatefulSetUpdateStrategyType struct {
-	Type           appsv1.StatefulSetUpdateStrategyType `json:"type,omitempty"`
-	RolelingUpdate *RolelingUpdate                      `json:"rolelingUpdate,omitempty"`
-}
-
-type RolelingUpdate struct {
-	Partition      *int32              `json:"partition,omitempty"`
-	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
 // MySQLRouterSpec defines the desired state of MySQLRouter
 // TODO:MySQLRouter is not implemented yet
 type Proxy struct {
 	Enabled bool `json:"enable,omitempty"`
-	PodSpec `json:",inline"`
-	Expose  ServiceExpose `json:"expose,omitempty"`
+	Pod     `json:",inline"`
 }
 
 // SchedulerBuckup defines the desired state of SchedulerBuckup
@@ -97,52 +85,66 @@ type MetricsCollection struct {
 	Enable *bool `json:"enable,omitempty"`
 }
 
-// PodSpec defines the desired state of Pod
-type PodSpec struct {
-	Affinity                      *PodAffinity               `json:"affinity,omitempty"` // pod affinity(pod亲和性)
-	Annotation                    map[string]string          `json:"annotation,omitempty"`
-	Labels                        map[string]string          `json:"labels,omitempty"`
-	NodeSelector                  map[string]string          `json:"nodeSelector,omitempty"`
-	Tolerations                   []corev1.Toleration        `json:"tolerations,omitempty"`                   //schedule tolerations
-	TerminationGracePeriodSeconds *int64                     `json:"terminationGracePeriodSeconds,omitempty"` // 在规定时间内停止pod，俗称 优雅停机
-	SchedulerName                 string                     `json:"schedulerName,omitempty"`
-	PodSecurityContext            *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
-	ServiceAccountName            string                     `json:"serviceAccountName,omitempty"`
-	ServiceName                   string                     `json:"serviceName,omitempty"`
-	Version                       string                     `json:"version,omitempty"`
-	Containers                    []ContainerSpec            `json:"containers,omitempty"` // container spec
-	Volumes                       []Volume                   `json:"volumes,omitempty"`
-	// PersistentVolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimTemplate,omitempty"`
-	DnsPolicy corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
+// Service 配置
+type Service struct {
+	Type  corev1.ServiceType   `json:"type,omitempty"`
+	Ports []corev1.ServicePort `json:"ports,omitempty"`
+	// +optional
+	Selector map[string]string `json:"selector,omitempty"`
+	// +optional
+	LoadBalancerClass *string `json:"loadBalancerClass,omitempty"`
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-type Volume struct {
-	Name         string                              `json:"name"`
-	VolumeSource corev1.VolumeSource                 `json:"volumeSource"`
-	VolumeMounts []corev1.VolumeMount                `json:"volumeMounts"`
-	StorageClass *string                             `json:"storageClass,omitempty"`
-	Size         *string                             `json:"size,omitempty"`
-	AccessModes  []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
-}
-
-// TODO: not implemented yet
-// PersistentVolumeClaimTemplate 创建pvc后会自动关联创建pv，
-// PersistentVolumeSource 是用于定义PV的持久卷的资源，暂时不考虑支持创建PV，只支持PVC
+// Storage 存储配置
 type Storage struct {
-	Type                          string                            `json:"type,omitempty"`
-	PersistentVolumeSource        *corev1.PersistentVolumeSource    `json:"persistentVolumeSource,omitempty"`
-	PersistentVolumeClaimTemplate *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimTemplate,omitempty"`
+	StorageClassName *string                             `json:"storageClassName,omitempty"`
+	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+	VolumeMode       *corev1.PersistentVolumeMode        `json:"volumeMode,omitempty"`
+	Size             *string                             `json:"size,omitempty"` // e.g. "10Gi"
 }
 
-// PodAffinity defines the affinity/anti-affinity rules for the pod.
-type PodAffinity struct {
-	//+builder:default="kubernetes.io/hostname"
-	//+Optional
-	TopologyKey *string `json:"antiAffinityTopologyKey,omitempty"`
+// Scheduling 调度策略
+type Scheduling struct {
+	Affinity                      *corev1.Affinity           `json:"affinity,omitempty"`
+	NodeSelector                  map[string]string          `json:"nodeSelector,omitempty"`
+	Tolerations                   []corev1.Toleration        `json:"tolerations,omitempty"`
+	SchedulerName                 string                     `json:"schedulerName,omitempty"`
+	TerminationGracePeriodSeconds *int64                     `json:"terminationGracePeriodSeconds,omitempty"`
+	PodSecurityContext            *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	DNSPolicy                     corev1.DNSPolicy           `json:"dnsPolicy,omitempty"`
 }
 
-// ContainerSpec defines the desired state of the container
-type ContainerSpec struct {
+// Upgrade 升级策略
+type Upgrade struct {
+	VersionServiceEndpoint string `json:"versionServiceEndpoint,omitempty"`
+	Apply                  string `json:"apply,omitempty"`
+}
+
+// UpdateStrategy 更新策略
+type UpdateStrategy struct {
+	Type          appsv1.StatefulSetUpdateStrategyType `json:"type,omitempty"`
+	RollingUpdate *RollingUpdate                       `json:"rollingUpdate,omitempty"`
+}
+
+// RollingUpdate 滚动更新
+type RollingUpdate struct {
+	Partition      *int32              `json:"partition,omitempty"`
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+}
+
+// Status 状态
+type Status struct {
+	Phase   string `json:"phase,omitempty"`
+	Message string `json:"message,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+	Age     string `json:"age,omitempty"`
+	Ready   int32  `json:"ready,omitempty"`
+}
+
+// Container 容器配置
+type Container struct {
 	Name             string                        `json:"name"`                       // Name of the container
 	Image            string                        `json:"image"`                      // Image of the container
 	ImagePullPolicy  corev1.PullPolicy             `json:"imagePullPolicy,omitempty"`  // Image pull policy
@@ -155,20 +157,29 @@ type ContainerSpec struct {
 	Envs             []corev1.EnvVar               `json:"env,omitempty"`              // Environment variables
 }
 
-// UpgradeOptions defines the desired state of UpgradeOptions
-type UpgradeOptions struct {
-	VersionServiceEndpoint string `json:"versionServiceEndpoint,omitempty"`
-	Apply                  string `json:"apply,omitempty"`
+// Pod 基础配置
+type Pod struct {
+	// 基础配置
+	Version                       string                     `json:"version,omitempty"`                       // 版本信息
+	ServiceAccountName            string                     `json:"serviceAccountName,omitempty"`            // ServiceAccount 名称
+	ServiceName                   string                     `json:"serviceName,omitempty"`                   // Service 名称
+	Containers                    []Container                `json:"containers,omitempty"`                    // 容器配置列表
+	Storages                      []Storage                  `json:"storages,omitempty"`                      // 存储配置列表
+	Affinity                      *Affinity                  `json:"affinity,omitempty"`                      // Pod 亲和性配置
+	NodeSelector                  map[string]string          `json:"nodeSelector,omitempty"`                  // 节点选择器
+	Tolerations                   []corev1.Toleration        `json:"tolerations,omitempty"`                   // 容忍配置
+	SchedulerName                 string                     `json:"schedulerName,omitempty"`                 // 调度器名称
+	TerminationGracePeriodSeconds *int64                     `json:"terminationGracePeriodSeconds,omitempty"` // 终止宽限期
+	PodSecurityContext            *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`            // Pod 安全上下文
+	DnsPolicy                     corev1.DNSPolicy           `json:"dnsPolicy,omitempty"`                     // DNS 策略
+	RestartPolicy                 corev1.RestartPolicy       `json:"restartPolicy,omitempty"`                 // 重启策略
 }
 
-// ServiceExpose defines the desired state of ServiceExpose
-type ServiceExpose struct {
-	Labels            map[string]string    `json:"labels,omitempty"`
-	Annotations       map[string]string    `json:"annotations,omitempty"`
-	Type              corev1.ServiceType   `json:"type,omitempty"`
-	Ports             []corev1.ServicePort `json:"ports,omitempty"`
-	Selector          map[string]string    `json:"selector,omitempty"`
-	LoadBalancerClass *string              `json:"loadBalancerClass,omitempty"`
+// Affinity defines the affinity/anti-affinity rules for the pod.
+type Affinity struct {
+	//+builder:default="kubernetes.io/hostname"
+	//+Optional
+	TopologyKey *string `json:"antiAffinityTopologyKey,omitempty"`
 }
 
 // PodAffinity returns the Standalone pod affinity of the resource
@@ -187,7 +198,7 @@ func SetPodAffinity(spec interface{}, labels map[string]string) *corev1.Affinity
 
 	switch spec := spec.(type) {
 	case Standalone:
-		topologyKey = spec.Spec.PodSpec.Affinity.TopologyKey
+		topologyKey = spec.Spec.Pod.Affinity.TopologyKey
 	case GroupReplicationCluster:
 		topologyKey = spec.Spec.ClusterSpec.PodSpec.Affinity.TopologyKey
 	default:

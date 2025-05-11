@@ -19,7 +19,7 @@ import (
  * @description: kubernetes pod operation
  */
 
-func NewContainers(name string, cr *v1alpha1.PodSpec, ordinal int, isStatefulSet bool) []corev1.Container {
+func NewContainers(name string, cr *v1alpha1.Pod, ordinal int, isStatefulSet bool) []corev1.Container {
 
 	var volumeMounts []corev1.VolumeMount
 
@@ -64,7 +64,7 @@ func NewContainers(name string, cr *v1alpha1.PodSpec, ordinal int, isStatefulSet
 	}
 }
 
-func NewPod(name, namespace, configMapName string, cr *v1alpha1.PodSpec, ordinal int) corev1.Pod {
+func NewPod(name, namespace, configMapName string, cr *v1alpha1.Pod, ordinal int) corev1.Pod {
 
 	return corev1.Pod{
 		TypeMeta: metav1.TypeMeta{

@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,35 +27,18 @@ import (
  * @description: Standalone types
  */
 
-// Standalone defines the desired state of Standalone
+// StandaloneSpec 单节点配置
 type StandaloneSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-
-	// Category   GreatSqlType                  `json:"category,omitempty"`
-	// Role           MemberRole                    `json:"role,omitempty"`
-	Size           *int32  `json:"size,omitempty"`
-	PodSpec        PodSpec `json:"podSpec,omitempty"`
-	ServiceExpose  `json:",omitempty"`
-	UpgradeOptions UpgradeOptions                `json:"upgradeOptions,omitempty"`
-	UpdateStrategy appsv1.DeploymentStrategyType `json:"updateStrategy,omitempty"`
+	Size           *int32 `json:"size,omitempty"`
+	Pod            `json:",omitempty"`
+	Upgrade        Upgrade        `json:"upgrade,omitempty"`
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty"`
+	Service        Service        `json:"service,omitempty"`
 }
 
-// GetSize returns the size of the Standalone
-func (s *StandaloneSpec) GetSize() int32 {
-	if s.Size != nil {
-		return *s.Size
-	}
-	return 1
-}
-
-// StandaloneStatus defines the observed state of Standalone
+// StandaloneStatus 状态
 type StandaloneStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	State State  `json:"state,omitempty"`
-	Size  int32  `json:"size,omitempty"`
-	Ready int32  `json:"ready,omitempty"`
-	Age   string `json:"age,omitempty"`
+	Status `json:",inline"`
 }
 
 //+kubebuilder:object:root=true
