@@ -68,8 +68,6 @@ helm install greatsql-cluster greatsql-operator/greatsql-operator \
   --set member[1].role=secondary \
   --set member[1].size=1 \
   --set storage.size=50Gi \
-  --set configFile.enabled=true \
-  --set configFile.files.my.cnf="[mysqld]\nserver-id=1\nlog-bin=mysql-bin\nbinlog-format=ROW"
 ```
 When enabled, PersistentVolumeClaims are created to store MySQL data, ensuring data durability even if the Pod is deleted or restarted.
 
