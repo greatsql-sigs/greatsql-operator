@@ -40,12 +40,18 @@ For detailed deployment instructions, please refer to the [Project Manual](docs/
 Please see our [Contribution Guide](./CONTRIBUTING_zh.md) for details on how to contribute to this project.
 
 ## Roadmap
- - [ ] Webhook validation
- - [ ] Multi-master cluster
- - [ ] Proxy SQL integration
- - [ ] Logical backup
- - [ ] Physical backups
- - [ ] [Prometheus](https://github.com/prometheus/prometheus) metrics exporter
+- [ ] Standalone instance
+- [ ] Cluster instance
+  - [ ] Single master
+  - [ ] Multi-master
+- [ ] Automatic failover
+- [ ] Self-healing
+- [ ] Backup and restore
+  - [ ] Logical backup
+  - [ ] Physical backup
+- [ ] Webhook validation
+- [ ] Router integration
+- [ ] [Prometheus](https://github.com/prometheus/prometheus) metrics export
 
 ## Version Notes
 

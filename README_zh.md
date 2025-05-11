@@ -37,12 +37,18 @@ GreatSQL Operator 是一个用于在 Kubernetes 上部署和管理 GreatSQL 数�
 请查看我们的[贡献指南](./CONTRIBUTING_zh.md)了解如何为该项目做出贡献。
 
 ## 路线图
- - [ ] webhook验证
- - [ ] 多主集群
- - [ ] Proxy SQL 集成
- - [ ] 逻辑备份
- - [ ] 物理备份
- - [ ] [Prometheus](https://github.com/prometheus/prometheus) 指标导出器
+- [ ] 独立实例
+- [ ] 集群实例
+  - [ ] 单主服务器
+  - [ ] 多主服务器
+- [ ] 自动故障转移
+- [ ] 自我修复
+- [ ] 备份和恢复
+  - [ ] 逻辑备份
+  - [ ] 物理备份
+- [ ] Webhook 验证
+- [ ] 路由器集成
+- [ ] [Prometheus](https://github.com/prometheus/prometheus) 指标导出
 
 ## 版本说明
 
