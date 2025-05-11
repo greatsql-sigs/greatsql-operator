@@ -34,6 +34,7 @@ jobs:
       - name: Package Helm charts
         run: |
           mkdir -p output
+          cp helm/index.html output/index.html
           helm package helm -d output
           helm repo index output --url https://greatsql-sigs.github.io/greatsql-operator
      
