@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  greatsql-operator:
+  - apiVersion: v2
+    appVersion: 1.16.0
+    created: "2024-12-30T20:03:17.599177822+08:00"
+    description: A Helm chart for deploying GreatSQL Operator
+    digest: 6d95c6ed3d5ab923a452ae32137d2ad45ec96c5c2e51180611020d927a15be5c
+    name: greatsql-operator
+    type: application
+    urls:
+    - https://greatsql-sigs.github.io/greatsql-operator-helm/greatsql-operator-v1.0.1-alpha-1.tgz
+    version: v1.0.1-alpha-1
+generated: "2024-12-30T20:03:17.597974444+08:00"

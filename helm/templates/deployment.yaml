@@ -1,0 +1,58 @@
+{{- if eq .Values.deploymentType "standalone" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-operator
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: mysql-operator
+  template:
+    metadata:
+      labels:
+        app: mysql-operator
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+      - name: mysql-operator
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        env:
+        - name: RECONCILIATION_INTERVAL
+          value: "{{ .Values.mysqlOperator.config.reconciliationInterval }}"
+{{- else if eq .Values.deploymentType "cluster" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-operator
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.mysqlOperator.clusterMode.size }}
+  selector:
+    matchLabels:
+      app: mysql-operator
+  serviceName: mysql-operator
+  template:
+    metadata:
+      labels:
+        app: mysql-operator
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+      - name: mysql-operator
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        env:
+        - name: RECONCILIATION_INTERVAL
+          value: "{{ .Values.mysqlOperator.config.reconciliationInterval }}"
+        volumeMounts:
+          {{- toYaml .Values.mysqlOperator.clusterMode.volumeMounts | nindent 12 }}
+  volumeClaimTemplates:
+    {{- toYaml .Values.mysqlOperator.clusterMode.volumeClaimTemplates | nindent 2 }}
+{{- end }}
