@@ -34,9 +34,9 @@ jobs:
       - name: Package Helm charts
         run: |
           mkdir -p output
-          helm package helm/* -d output
-          helm repo index output --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-
+          helm package helm -d output
+          helm repo index output --url https://greatsql-sigs.github.io/greatsql-operator
+     
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
