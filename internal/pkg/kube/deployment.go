@@ -32,7 +32,7 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 	if cr.Spec.Pod.Affinity == nil {
 		cr.Spec.Pod.Affinity = nil
 	} else {
-		affinity = cr.PodAffinity(labels)
+		affinity = SetAffinity(cr.Spec, labels)
 	}
 
 	return &appsv1.Deployment{

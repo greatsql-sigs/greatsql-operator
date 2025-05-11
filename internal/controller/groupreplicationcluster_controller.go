@@ -193,7 +193,7 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 
 // createSecret creates a Secret for the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	secret := kube.NewSecretEnv(req.Name+"-secret", req.Namespace, mgr.Spec.ClusterSpec.PodSpec.Containers[0].Envs)
+	secret := kube.NewSecretEnv(req.Name+"-secret", req.Namespace, mgr.Spec.Containers[0].Envs)
 	if err := r.Client.Create(ctx, secret); err != nil {
 		r.Log.Error(err, "Could not create secret")
 		return err
@@ -218,7 +218,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 
 	groupSeeds := []string{fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local:%d", req.Name, ordinal, req.Name, req.Namespace, consts.MgrCommunicatePort)}
 
-	memoryReq := mgr.Spec.ClusterSpec.PodSpec.Containers[0].Resources.Requests.Memory().Value()
+	memoryReq := mgr.Spec.Containers[0].Resources.Requests.Memory().Value()
 	cnf := new(mysql.MySQLConfig)
 	cnf.ServerID = fmt.Sprintf("%d", ordinal)
 	cnf.EnableCluster = true

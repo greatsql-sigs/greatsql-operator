@@ -20,23 +20,36 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// MemberRole 成员角色
+type MemberRole string
 
-// GroupReplicationClusterSpec defines the desired state of GroupReplicationCluster
-type GroupReplicationClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+const (
+	PrimaryRole    MemberRole = "primary"
+	SecondaryRole  MemberRole = "secondary"
+	ArbitratorRole MemberRole = "arbitrator"
+)
 
-	Member            []Member                      `json:"member,omitempty"`
-	ClusterSpec       *MySQLGroupReplicationCluster `json:"clusterSpec,omitempty"`
-	ProxySpec         *Proxy                        `json:"proxy,omitempty"`
-	SchedulerBuckup   *SchedulerBuckup              `json:"schedulerBuckup,omitempty"`
-	MetricsCollection *MetricsCollection            `json:"metricsCollection,omitempty"`
-}
+// ClusterType 集群类型
+type ClusterType string
+
+const (
+	ClusterTypeSingle   ClusterType = "single"
+	ClusterTypeMultiple ClusterType = "multiple"
+)
 
 type Member struct {
 	Role MemberRole `json:"role,omitempty"`
 	Size *int32     `json:"size,omitempty"`
+}
+
+// GroupReplicationClusterSpec defines the desired state of GroupReplicationCluster
+type GroupReplicationClusterSpec struct {
+	ClusterType    ClusterType `json:"clusterType,omitempty"`
+	Member         []Member    `json:"member,omitempty"`
+	*Pod           `json:",inline"`
+	Upgrade        Upgrade         `json:"upgrade,omitempty"`
+	UpdateStrategy *UpdateStrategy `json:"updateStrategy,omitempty"`
+	Service        *Service        `json:"service,omitempty"`
 }
 
 func (m *Member) GetSize() int32 {
@@ -49,19 +62,11 @@ func (m *Member) GetSize() int32 {
 
 // GroupReplicationClusterStatus defines the observed state of GroupReplicationCluster
 type GroupReplicationClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	State State  `json:"state,omitempty"`
-	Size  int32  `json:"size,omitempty"`
-	Ready int32  `json:"ready,omitempty"`
-	Age   string `json:"age,omitempty"`
+	Status Status `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state",description="The access point of the GroupReplicationCluster"
-//+kubebuilder:printcolumn:name="Size",type="integer",JSONPath=".spec.size",description="The size of the GroupReplicationCluster"
-//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The ready of the GroupReplicationCluster"
-//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the GroupReplicationCluster"
 
 // GroupReplicationCluster is the Schema for the GroupReplicationClusters API
 type GroupReplicationCluster struct {

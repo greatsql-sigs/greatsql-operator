@@ -43,10 +43,6 @@ type StandaloneStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state",description="The access point of the Standalone"
-//+kubebuilder:printcolumn:name="Size",type="integer",JSONPath=".spec.size",description="The size of the Standalone"
-//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The ready of the Standalone"
-//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the Standalone"
 
 // Standalone is the Schema for the singles API
 type Standalone struct {

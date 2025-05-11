@@ -238,7 +238,7 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 	}
 	result := &v1alpha1.StandaloneStatus{
 		Status: v1alpha1.Status{
-			Phase: v1alpha1.StateInitializing.String(),
+			Phase: v1alpha1.PhaseInitializing,
 		},
 	}
 	result.Status.Ready = 0
@@ -251,16 +251,16 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 
 	switch len(deployList.Items) {
 	case 0:
-		result.Status.Phase = v1alpha1.StatePaused.String()
+		result.Status.Phase = v1alpha1.PhaseInitializing
 		r.Log.Info("no deployment found")
 	case 1:
 		status := deployList.Items[0].Status
 		result.Status.Ready = status.ReadyReplicas
 		r.Log.Info("got deployment status", "status", status)
-		result.Status.Phase = determineState(status.ReadyReplicas).String()
+		result.Status.Phase = determineState(status.ReadyReplicas)
 	default:
 		r.Log.Info("too many deployments found", "count", len(deployList.Items))
-		result.Status.Phase = v1alpha1.StateError.String()
+		result.Status.Phase = v1alpha1.PhaseError
 		return result, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
 	}
 
@@ -279,11 +279,11 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 }
 
 // determineState helps decide the state based on ready replicas
-func determineState(readyReplicas int32) v1alpha1.State {
+func determineState(readyReplicas int32) v1alpha1.Phase {
 	if readyReplicas == 1 {
-		return v1alpha1.StateReady
+		return v1alpha1.PhaseReady
 	}
-	return v1alpha1.StateInitializing
+	return v1alpha1.PhaseInitializing
 }
 
 // SetupWithManager sets up the controller with the Manager.
