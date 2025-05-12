@@ -1,10 +1,9 @@
 name: Publish Helm Charts to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  release:
+    # 仅在正式发布时触发
+    types: [published]
 
 permissions:
   contents: read
@@ -34,10 +33,18 @@ jobs:
       - name: Package Helm charts
         run: |
           mkdir -p output
-          cp helm/index.html output/index.html
-          helm package helm -d output
+          
+          if [ -f helm/index.html ]; then
+            cp helm/index.html output/index.html
+          fi
+          
+          for chart in helm/*/Chart.yaml; do
+            chart_dir=$(dirname "$chart")
+            helm package "$chart_dir" -d output
+          done
+
           helm repo index output --url https://greatsql-sigs.github.io/greatsql-operator
-     
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
