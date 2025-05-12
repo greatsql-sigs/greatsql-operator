@@ -1,4 +1,4 @@
-package kube
+package storage
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
  * @description: persistent volume
  */
 
-// 默认PersistentVolumeClaim大小
+// DefaultPersistentVolumeClaimSize 默认PersistentVolumeClaim大小
 const DefaultPersistentVolumeClaimSize = "5Gi"
 
 // BuildPersistentVolumeClaim 单个 PVC 通用规范

@@ -19,6 +19,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 	"reflect"
 	"time"
 
@@ -139,7 +142,7 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 // createRequiredResources creates the required resources for the Standalone
 func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
 	// 创建 Service
-	service := kube.BuildServices(req.Name, req.Namespace, cr.Spec.Service)
+	service := network.BuildServices(req.Name, req.Namespace, cr.Spec.Service)
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, service); err != nil {
 		r.Log.Error(err, "Could not create service")
 		return err
@@ -168,7 +171,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 
 	// 创建 PVC
 	size := cr.Spec.Size
-	pvcs, err := kube.BuildPersistentVolumeClaims(cr, corev1.ReadWriteOnce, kube.DefaultPersistentVolumeClaimSize, nil, int(*size))
+	pvcs, err := storage.BuildPersistentVolumeClaims(cr, corev1.ReadWriteOnce, storage.DefaultPersistentVolumeClaimSize, nil, int(*size))
 	if err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaims")
 		return err
@@ -215,7 +218,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 		return volumeMounts, nil
 	}
 
-	sts, err := kube.BuildStatefulSet(cr, configMap.Name, service.Name, 0, volumeBuilder, volumeMountBuilder)
+	sts, err := workload.BuildStatefulSet(cr, configMap.Name, service.Name, 0, volumeBuilder, volumeMountBuilder)
 	if err != nil {
 		r.Log.Error(err, "Failed to build StatefulSet")
 		return err

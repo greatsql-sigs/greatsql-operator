@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 	"strings"
 	"time"
 
@@ -177,13 +179,13 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 		consts.AppKubernetesInstance: req.Name,
 	}
 
-	pods, err := kube.PodsByLabels(ctx, r.Client, labels, req.Namespace)
+	pods, err := workload.PodsByLabels(ctx, r.Client, labels, req.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get pods: %v", err)
 	}
 
 	for _, pod := range pods {
-		if !kube.IsPodReady(&pod) {
+		if !workload.IsPodReady(&pod) {
 			return fmt.Errorf("pod %s is not ready", pod.Name)
 		}
 	}
@@ -250,7 +252,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
-	pvc, err := kube.BuildPersistentVolumeClaim(mgr, corev1.ReadWriteOnce, kube.DefaultPersistentVolumeClaimSize, nil)
+	pvc, err := storage.BuildPersistentVolumeClaim(mgr, corev1.ReadWriteOnce, storage.DefaultPersistentVolumeClaimSize, nil)
 	if err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaim")
 		return err
@@ -261,7 +263,7 @@ func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx cont
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
-	sts, err := kube.BuildStatefulSet(mgr, configMapName, fmt.Sprintf("%s-headless", req.Name), ordinal, nil, nil)
+	sts, err := workload.BuildStatefulSet(mgr, configMapName, fmt.Sprintf("%s-headless", req.Name), ordinal, nil, nil)
 	if err != nil {
 		r.Log.Error(err, "Could not create statefulSet")
 		return err

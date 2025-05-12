@@ -1,7 +1,8 @@
-package kube
+package workload
 
 import (
 	"fmt"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
 
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
@@ -32,7 +33,7 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 	if cr.Spec.Pod.Affinity == nil {
 		cr.Spec.Pod.Affinity = nil
 	} else {
-		affinity = SetAffinity(cr.Spec, labels)
+		affinity = kube.SetAffinity(cr.Spec, labels)
 	}
 
 	return &appsv1.Deployment{

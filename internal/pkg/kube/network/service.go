@@ -1,4 +1,4 @@
-package kube
+package network
 
 import (
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"

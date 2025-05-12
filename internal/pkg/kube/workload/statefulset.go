@@ -1,7 +1,8 @@
-package kube
+package workload
 
 import (
 	"fmt"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
 	"reflect"
 	"strconv"
 
@@ -140,7 +141,7 @@ func BuildStatefulSet(
 						},
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceStorage: resource.MustParse(DefaultPersistentVolumeClaimSize),
+								corev1.ResourceStorage: resource.MustParse(storage.DefaultPersistentVolumeClaimSize),
 							},
 						},
 						StorageClassName: func() *string {
