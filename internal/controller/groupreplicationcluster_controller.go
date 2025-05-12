@@ -221,14 +221,15 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	groupSeeds := []string{fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local:%d", req.Name, ordinal, req.Name, req.Namespace, consts.MgrCommunicatePort)}
 
 	memoryReq := mgr.Spec.Containers[0].Resources.Requests.Memory().Value()
-	cnf := new(mysql.MySQLConfig)
-	cnf.ServerID = fmt.Sprintf("%d", ordinal)
-	cnf.EnableCluster = true
-	cnf.GroupReplicationGroupName = utils.GetUUID()
-	cnf.GroupReplicationGroupSeeds = strings.Join(groupSeeds, ",")
-	cnf.ReportHost = fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace)
-	cnf.ReportPort = 3306
-	cnf.InnodbBufferPoolSize = mysql.CalculateInnodbBufferPoolSize(memoryReq)
+	cnf := mysql.NewConfig(
+		mysql.WithServerID(fmt.Sprintf("%d", ordinal)),
+		mysql.WithEnableCluster(true),
+		mysql.WithGroupReplicationGroupName(utils.GetUUID()),
+		mysql.WithGroupReplicationGroupSeeds(strings.Join(groupSeeds, ",")),
+		mysql.WithReportHost(fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace)),
+		mysql.WithReportPort(3306),
+		mysql.WithInnodbBufferPoolSize(mysql.CalculateInnodbBufferPoolSize(memoryReq)),
+	)
 
 	// 判断当前节点是否为仲裁节点
 	// 条件: 1. 节点角色为仲裁者(Arbitrator)
@@ -240,7 +241,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 		cnf.GroupReplicationArbitrator = "OFF"
 	}
 
-	data, err := cnf.String(*cnf)
+	data, err := cnf.Render()
 	if err != nil {
 		r.Log.Error(err, "Could not get configMap data")
 		return err

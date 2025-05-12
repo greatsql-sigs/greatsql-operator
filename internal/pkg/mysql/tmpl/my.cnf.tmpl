@@ -111,12 +111,12 @@ loose-group_replication_ssl_mode = DISABLED
 loose-group_replication_start_on_boot = ON
 loose-group_replication_bootstrap_group = OFF
 loose-group_replication_exit_state_action = READ_ONLY
-loose-group_replication_flow_control_mode = "DISABLED"
-loose-group_replication_single_primary_mode = ON
-loose-group_replication_enforce_update_everywhere_checks = OFF
+loose-group_replication_flow_control_mode = {{.GroupReplicationFlowControl}}
+loose-group_replication_single_primary_mode = {{if .SinglePrimaryMode}}ON{{else}}OFF{{end}}
+loose-group_replication_enforce_update_everywhere_checks = {{if .SinglePrimaryMode}}OFF{{else}}ON{{end}}
 loose-group_replication_majority_after_mode = ON
 loose-group_replication_communication_max_message_size = 10M
-loose-group_replication_arbitrator = OFF
+loose-group_replication_arbitrator = {{.GroupReplicationArbitrator}}
 loose-group_replication_single_primary_fast_mode = 1
 loose-group_replication_request_time_threshold = 100
 loose-group_replication_primary_election_mode = GTID_FIRST
@@ -125,6 +125,9 @@ loose-group_replication_member_expel_timeout = 5
 loose-group_replication_autorejoin_tries = 288
 loose-group_replication_recovery_get_public_key = ON
 loose-group_replication_donor_threshold = 100
+{{if .GroupReplicationConsistency}}
+loose-group_replication_consistency = {{.GroupReplicationConsistency}}
+{{end}}
 report_host = {{.ReportHost}}
 report_port = {{.ReportPort}}
 {{ end -}}

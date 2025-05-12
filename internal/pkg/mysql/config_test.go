@@ -1,7 +1,6 @@
 package mysql
 
 import (
-	"log"
 	"testing"
 )
 
@@ -15,25 +14,15 @@ import (
 func TestConfig(t *testing.T) {
 
 	// string
-	cnfStr := new(MySQLConfig)
-	cnfStr.EnableCluster = true
-	cnfStr.ServerID = "0"
-	cnfStr.GroupReplicationGroupName = "greatsql"
-	cnfStr.GroupReplicationGroupSeeds = "1.1.1.1:3306"
-	cnfStr.GroupReplicationLocalAddress = "1.1.1.1:3306,1.1.1.2:3306,1.1.1.3:3306"
-	cnfStr.ReportHost = "1.1.1.1"
-	cnfStr.ReportPort = 3306
-	cnfStr.InnodbBufferPoolSize = "1G"
+	cnfStr := NewConfig(
+		WithSinglePrimaryMode(true),
+		WithGroupReplicationConsistency("EVENTUAL"),
+		WithGroupReplicationFlowControl("QUOTA"),
+	)
 
-	cnf, err := cnfStr.String(*cnfStr)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println(cnf)
+	cnfStr.Render()
 
 	// file
-	// default path is /tmp/my.cnf
-	if err := cnfStr.File(*cnfStr); err != nil {
-		t.Fatalf("File() error: %v", err)
-	}
+	cnfStr.WriteToFile("/tmp/my.cnf")
+
 }

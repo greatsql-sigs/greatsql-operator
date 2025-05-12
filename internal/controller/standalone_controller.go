@@ -149,16 +149,19 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 	}
 
 	// 创建 MySQL 配置
-	cnf := &mysql.MySQLConfig{
-		ServerID:                   "0",
-		EnableCluster:              false,
-		GroupReplicationGroupName:  "greatsql",
-		GroupReplicationGroupSeeds: "",
-		ReportHost:                 "",
-		ReportPort:                 3306,
-		InnodbBufferPoolSize:       "1G",
-	}
-	data, err := cnf.String(*cnf)
+	cnf := mysql.NewConfig(
+		mysql.WithServerID("0"),
+		mysql.WithEnableCluster(false),
+		mysql.WithGroupReplicationGroupName("greatsql"),
+		mysql.WithGroupReplicationGroupSeeds(""),
+		mysql.WithReportHost(""),
+		mysql.WithReportPort(3306),
+		mysql.WithInnodbBufferPoolSize("1G"),
+		mysql.WithSinglePrimaryMode(true),
+		mysql.WithGroupReplicationConsistency("EVENTUAL"),
+		mysql.WithGroupReplicationFlowControl("QUOTA"),
+	)
+	data, err := cnf.Render()
 	if err != nil {
 		r.Log.Error(err, "Could not get configMap data")
 		return err

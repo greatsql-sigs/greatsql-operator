@@ -23,60 +23,52 @@ type MySQLConfig struct {
 	EnableCluster                bool
 	GroupReplicationGroupName    string
 	GroupReplicationLocalAddress string
-	GroupReplicationGroupSeeds   string // TODO: 这个参数可能是一个字符串数组，暂时先用字符串表示，后续待验证，列为todo
+	GroupReplicationGroupSeeds   string // TODO: 这个参数可能是一个字符串数组，暂时先用字符串表示，后续待验证
 	ReportHost                   string
 	ReportPort                   int
 	GroupReplicationArbitrator   string
 	InnodbBufferPoolSize         string
+	SinglePrimaryMode            bool   // 是否使用单主模式，false表示多主模式
+	GroupReplicationConsistency  string // 一致性级别
+	GroupReplicationFlowControl  string // 流控模式
 }
 
-// configTemplate is a template for the MySQL configuration file.
-func (c *MySQLConfig) String(cnf MySQLConfig) (string, error) {
-	c.ServerID = cnf.ServerID
-	c.EnableCluster = cnf.EnableCluster
-	c.GroupReplicationGroupName = cnf.GroupReplicationGroupName
-	c.GroupReplicationLocalAddress = cnf.GroupReplicationLocalAddress
-	c.GroupReplicationGroupSeeds = cnf.GroupReplicationGroupSeeds
-	c.ReportHost = cnf.ReportHost
-	c.ReportPort = cnf.ReportPort
-	c.GroupReplicationArbitrator = cnf.GroupReplicationArbitrator
-	c.InnodbBufferPoolSize = cnf.InnodbBufferPoolSize
+// New 创建一个新的MySQLConfig实例并设置默认值
+func NewConfig(opts ...Option) *MySQLConfig {
+	cfg := &MySQLConfig{
+		EnableCluster:               false,
+		SinglePrimaryMode:           true,
+		GroupReplicationConsistency: "EVENTUAL",
+		GroupReplicationFlowControl: "QUOTA",
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
 
+// Render renders the configuration to a string using the embedded template.
+func (c *MySQLConfig) Render() (string, error) {
 	tmpl, err := template.ParseFS(tmplFS, "tmpl/my.cnf.tmpl")
 	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %v", err)
+		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
 
-	var configBuffer bytes.Buffer
-
-	// writer buffer
-	if err := tmpl.Execute(&configBuffer, c); err != nil {
-		return "", fmt.Errorf("failed to render template: %v", err)
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, c); err != nil {
+		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
-
-	return configBuffer.String(), nil
+	return buf.String(), nil
 }
 
-// File generates a MySQL configuration file with the given parameters and writes it to the specified path.
-func (c *MySQLConfig) File(cnf MySQLConfig) error {
-	config, err := c.String(cnf)
+// WriteToFile renders the config and writes it to the specified path.
+func (c *MySQLConfig) WriteToFile(path string) error {
+	content, err := c.Render()
 	if err != nil {
 		return err
 	}
-
-	file, err := os.Create("/tmp/my.cnf")
-	if err != nil {
-		return fmt.Errorf("failed to create file: %v", err)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write file %s: %w", path, err)
 	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	if _, err := file.WriteString(config); err != nil {
-		return fmt.Errorf("failed to write config: %v", err)
-	}
-
 	return nil
 }
