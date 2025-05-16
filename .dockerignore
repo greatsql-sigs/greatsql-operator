@@ -4,5 +4,5 @@
 .vscode/
 .idea/
 bin/
-examples/
 scripts/
+docs/

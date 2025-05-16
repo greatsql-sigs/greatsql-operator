@@ -14,24 +14,7 @@ spec:
     singular: groupreplicationcluster
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - description: The access point of the GroupReplicationCluster
-      jsonPath: .status.state
-      name: State
-      type: string
-    - description: The size of the GroupReplicationCluster
-      jsonPath: .spec.size
-      name: Size
-      type: integer
-    - description: The ready of the GroupReplicationCluster
-      jsonPath: .status.ready
-      name: Ready
-      type: integer
-    - description: The age of the GroupReplicationCluster
-      jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: GroupReplicationCluster is the Schema for the GroupReplicationClusters
@@ -65,9 +48,6 @@ spec:
                   antiAffinityTopologyKey:
                     type: string
                 type: object
-              clusterType:
-                description: ClusterType 集群类型
-                type: string
               containers:
                 items:
                   description: Container 容器配置
@@ -956,6 +936,9 @@ spec:
                       type: integer
                   type: object
                 type: array
+              mode:
+                description: ClusterMode 集群模式
+                type: string
               nodeSelector:
                 additionalProperties:
                   type: string

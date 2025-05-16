@@ -33,7 +33,7 @@ type MySQLConfig struct {
 	GroupReplicationFlowControl  string // 流控模式
 }
 
-// New 创建一个新的MySQLConfig实例并设置默认值
+// NewConfig 创建一个新的MySQLConfig实例并设置默认值
 func NewConfig(opts ...Option) *MySQLConfig {
 	cfg := &MySQLConfig{
 		EnableCluster:               false,

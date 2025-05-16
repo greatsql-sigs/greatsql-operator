@@ -19,10 +19,11 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 	"strings"
 	"time"
+
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -68,7 +69,6 @@ const (
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
 	r.Log.Info("Reconciling GroupReplicationCluster...")
 
 	mgr := &v1alpha1.GroupReplicationCluster{}
@@ -79,6 +79,13 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 		}
 		r.Log.Error(err, "unable to fetch GroupReplicationCluster")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// 验证集群配置
+	if err := mgr.Spec.ValidateClusterSpec(); err != nil {
+		r.Log.Error(err, "invalid cluster specification")
+		r.EventRecorder.Event(mgr, "Warning", "InvalidSpec", err.Error())
+		return ctrl.Result{}, err
 	}
 
 	if err := r.handleFinalizer(ctx, mgr); err != nil {
@@ -134,42 +141,71 @@ func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context,
 		return err
 	}
 
-	// if err := r.createService(ctx, req, mgr); err != nil {
-	// 	return err
-	// }
-
-	// Create resources for each member
-	size := mgr.Spec.Member[0].GetSize()
-	for ordinal := 0; ordinal < int(size); ordinal++ { // Changed from 1 to 0 to include first node
-		// Create ConfigMap for each member
-		if err := r.createConfigMap(ctx, req, mgr, ordinal); err != nil {
-			return err
-		}
-
-		// Create PVC for each member
-		if err := r.createPersistentVolumeClaim(ctx, mgr, ordinal); err != nil {
-			return err
-		}
-
-		// Create StatefulSet for each member
-		if err := r.createStatefulSet(ctx, req, mgr, ordinal); err != nil {
-			return err
-		}
+	// 根据集群模式创建资源
+	if mgr.Spec.IsSingleMode() {
+		return r.createSingleMasterModeResources(ctx, req, mgr)
+	} else if mgr.Spec.IsMultipleMode() {
+		return r.createMultipleMasterModeResources(ctx, req, mgr)
 	}
 
-	// Wait for pods to be ready before initializing cluster
+	return fmt.Errorf("unsupported cluster mode: %s", mgr.Spec.Mode)
+}
+
+// createSingleMasterModeResources 创建单主模式的资源
+func (r *GroupReplicationClusterReconciler) createSingleMasterModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+	// 创建 ConfigMap
+	if err := r.createConfigMap(ctx, req, mgr, 0); err != nil {
+		return err
+	}
+
+	// 创建 PVC
+	if err := r.createPersistentVolumeClaim(ctx, mgr, 0); err != nil {
+		return err
+	}
+
+	// 创建 StatefulSet
+	if err := r.createStatefulSet(ctx, req, mgr, 0); err != nil {
+		return err
+	}
+
+	// 等待 Pod 就绪
 	if err := r.waitForPodsReady(ctx, req); err != nil {
 		return err
 	}
 
-	// Initialize cluster after all pods are ready
-	for ordinal := 0; ordinal < int(size); ordinal++ {
-		if err := r.initializeCluster(mgr, ordinal); err != nil {
+	// 初始化单节点集群
+	return r.initializeSingleMasterCluster(mgr)
+}
+
+// createMultipleMasterModeResources 创建多主模式的资源
+func (r *GroupReplicationClusterReconciler) createMultipleMasterModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+	totalMembers := mgr.Spec.GetTotalMembers()
+
+	// 创建所有节点的资源
+	for ordinal := int32(0); ordinal < totalMembers; ordinal++ {
+		// 创建 ConfigMap
+		if err := r.createConfigMap(ctx, req, mgr, int(ordinal)); err != nil {
+			return err
+		}
+
+		// 创建 PVC
+		if err := r.createPersistentVolumeClaim(ctx, mgr, int(ordinal)); err != nil {
+			return err
+		}
+
+		// 创建 StatefulSet
+		if err := r.createStatefulSet(ctx, req, mgr, int(ordinal)); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	// 等待所有 Pod 就绪
+	if err := r.waitForPodsReady(ctx, req); err != nil {
+		return err
+	}
+
+	// 初始化多节点集群
+	return r.initializeMultipleMasterCluster(mgr)
 }
 
 // waitForPodsReady waits for all pods to be ready
@@ -299,29 +335,67 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 // 	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
 // }
 
-// initializeCluster initializes the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) initializeCluster(mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
+// initializeSingleMasterCluster 初始化单节点集群
+func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v1alpha1.GroupReplicationCluster) error {
 	mysql := mysql.MySQL{
-		Host:     fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", mgr.Name, ordinal, mgr.Name, mgr.Namespace),
+		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace),
 		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
 		Password: consts.MySQLRootPassWord,
 		DB:       consts.MySQLDB,
 	}
 
-	clusterExist, err := mysql.IsMGRClusterExist()
-	if err != nil {
-		return fmt.Errorf("failed to check cluster existence: %w", err)
+	// 单节点模式下，直接启动组复制
+	steps := []struct {
+		name string
+		fn   func() error
+	}{
+		{"create replication user", func() error {
+			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+		}},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
+		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
+		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},
 	}
 
-	if !clusterExist {
-		if ordinal != 0 {
-			return fmt.Errorf("only the first node (ordinal=0) can bootstrap the cluster")
+	for _, step := range steps {
+		if err := step.fn(); err != nil {
+			return fmt.Errorf("failed to %s: %w", step.name, err)
 		}
-		return r.bootstrapPrimaryNode(mgr, &mysql)
 	}
 
-	return r.joinSecondaryNode(mgr, ordinal, &mysql)
+	r.Log.Info("Single node cluster successfully initialized")
+	return nil
+}
+
+// initializeMultipleMasterCluster 初始化多节点集群
+func (r *GroupReplicationClusterReconciler) initializeMultipleMasterCluster(mgr *v1alpha1.GroupReplicationCluster) error {
+	totalMembers := mgr.Spec.GetTotalMembers()
+
+	// 首先初始化主节点
+	if err := r.bootstrapPrimaryNode(mgr, nil); err != nil {
+		return fmt.Errorf("failed to bootstrap primary node: %w", err)
+	}
+
+	// 然后添加从节点
+	for ordinal := int32(1); ordinal < totalMembers; ordinal++ {
+		member := mgr.Spec.GetMemberByOrdinal(ordinal)
+		if member == nil {
+			return fmt.Errorf("failed to get member for ordinal %d", ordinal)
+		}
+
+		// 如果是仲裁节点，跳过组复制初始化
+		if member.Role == v1alpha1.ArbitratorRole {
+			continue
+		}
+
+		if err := r.joinSecondaryNode(mgr, int(ordinal), nil); err != nil {
+			return fmt.Errorf("failed to join secondary node %d: %w", ordinal, err)
+		}
+	}
+
+	r.Log.Info("Multiple node cluster successfully initialized")
+	return nil
 }
 
 func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.GroupReplicationCluster, mysql *mysql.MySQL) error {

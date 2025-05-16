@@ -14,24 +14,7 @@ spec:
     singular: standalone
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - description: The access point of the Standalone
-      jsonPath: .status.state
-      name: State
-      type: string
-    - description: The size of the Standalone
-      jsonPath: .spec.size
-      name: Size
-      type: integer
-    - description: The ready of the Standalone
-      jsonPath: .status.ready
-      name: Ready
-      type: integer
-    - description: The age of the Standalone
-      jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Standalone is the Schema for the singles API
