@@ -29,8 +29,6 @@ import (
  * @description: common types
  */
 
-
-
 // Phase defines the state of the member
 type Phase string
 
@@ -100,7 +98,7 @@ type Scheduling struct {
 	// +optional
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// +optional
-	DNSPolicy corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
+	PriorityClassName *string `json:"priorityClassName,omitempty"`
 }
 
 // Upgrade 升级策略

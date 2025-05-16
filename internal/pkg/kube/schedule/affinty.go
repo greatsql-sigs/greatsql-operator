@@ -1,4 +1,4 @@
-package kube
+package schedule
 
 import (
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
