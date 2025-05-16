@@ -54,14 +54,6 @@ type GroupReplicationClusterSpec struct {
 	Service        *Service        `json:"service,omitempty"`
 }
 
-func (m *Member) GetSize() int32 {
-	count := int32(0)
-	if m.Size != nil {
-		count++
-	}
-	return count
-}
-
 // GroupReplicationClusterStatus defines the observed state of GroupReplicationCluster
 type GroupReplicationClusterStatus struct {
 	Status Status `json:"status,omitempty"`
@@ -92,11 +84,19 @@ func init() {
 	SchemeBuilder.Register(&GroupReplicationCluster{}, &GroupReplicationClusterList{})
 }
 
+func (m *Member) getSize() int32 {
+	count := int32(0)
+	if m.Size != nil {
+		count++
+	}
+	return count
+}
+
 // GetTotalMembers 获取集群总成员数
 func (s *GroupReplicationClusterSpec) GetTotalMembers() int32 {
 	var total int32
 	for _, member := range s.Member {
-		total += member.GetSize()
+		total += member.getSize()
 	}
 	return total
 }
@@ -113,6 +113,9 @@ func (s *GroupReplicationClusterSpec) IsMultipleMode() bool {
 
 // GetPrimaryMembers 获取主节点成员列表
 func (s *GroupReplicationClusterSpec) GetPrimaryMembers() []Member {
+	if s.IsSingleMode() {
+		return []Member{s.Member[0]}
+	}
 	var primaries []Member
 	for _, member := range s.Member {
 		if member.Role == PrimaryRole {
@@ -146,26 +149,28 @@ func (s *GroupReplicationClusterSpec) GetArbitratorMembers() []Member {
 
 // ValidateClusterSpec 验证集群配置是否有效
 func (s *GroupReplicationClusterSpec) ValidateClusterSpec() error {
-	if s.IsSingleMode() {
-		// 单节点模式验证
+	switch {
+	case s.IsSingleMode():
 		if s.GetTotalMembers() != 1 {
 			return fmt.Errorf("single mode cluster must have exactly one member")
 		}
 		if len(s.GetPrimaryMembers()) != 1 {
 			return fmt.Errorf("single mode cluster must have exactly one primary member")
 		}
-	} else if s.IsMultipleMode() {
-		// 多节点模式验证
+		if len(s.GetArbitratorMembers()) > 1 {
+			return fmt.Errorf("single mode cluster must have at most one arbiter member")
+		}
+	case s.IsMultipleMode():
 		if s.GetTotalMembers() < 3 {
 			return fmt.Errorf("multiple mode cluster must have at least 3 members")
 		}
-		if len(s.GetPrimaryMembers()) != 1 {
-			return fmt.Errorf("multiple mode cluster must have exactly one primary member")
+		if len(s.GetPrimaryMembers()) < 1 {
+			return fmt.Errorf("multiple mode cluster must have at least one primary member")
 		}
-		if len(s.GetSecondaryMembers()) < 1 {
-			return fmt.Errorf("multiple mode cluster must have at least one secondary member")
+		if len(s.GetArbitratorMembers()) > 1 {
+			return fmt.Errorf("multiple mode cluster must have at most one arbiter member")
 		}
-	} else {
+	default:
 		return fmt.Errorf("invalid cluster mode: %s", s.Mode)
 	}
 	return nil
@@ -175,7 +180,7 @@ func (s *GroupReplicationClusterSpec) ValidateClusterSpec() error {
 func (s *GroupReplicationClusterSpec) GetMemberByOrdinal(ordinal int32) *Member {
 	var currentOrdinal int32
 	for _, member := range s.Member {
-		size := member.GetSize()
+		size := member.getSize()
 		if ordinal >= currentOrdinal && ordinal < currentOrdinal+size {
 			return &member
 		}
