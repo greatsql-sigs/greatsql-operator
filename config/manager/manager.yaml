@@ -25,7 +25,7 @@ spec:
   selector:
     matchLabels:
       control-plane: greatsql-controller-manager
-  replicas: 1
+  replicas: 3
   template:
     metadata:
       annotations:
