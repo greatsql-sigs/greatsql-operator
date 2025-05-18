@@ -59,3 +59,4 @@ kubectl delete validatingwebhookconfiguration vgroupreplicationcluster.kb.io
 - [描述文件安装](docs/description_install.md)
 - [Helm 安装](docs/helm_install.md)
 - [Operator 字段说明](docs/operator_field.md)
+- [Operator 高可用实现](docs/high_availability.md)
