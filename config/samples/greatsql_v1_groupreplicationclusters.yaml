@@ -10,6 +10,7 @@ metadata:
   finalizers:
     - finalizer.greatsql.cn
 spec:
+  mode: "single"
   member: 
     - role: primary
       size: 1

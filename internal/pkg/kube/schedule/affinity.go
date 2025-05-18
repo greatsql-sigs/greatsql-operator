@@ -6,8 +6,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SetAffinity sets the pod affinity of the resource
-func SetAffinity(cr any, labels map[string]string) *corev1.Affinity {
+// SetPodAffinity sets the pod affinity of the resource
+func SetPodAffinity(cr any, labels map[string]string) *corev1.Affinity {
 	var topologyKey *string
 
 	switch spec := cr.(type) {
@@ -59,5 +59,31 @@ func SetAffinity(cr any, labels map[string]string) *corev1.Affinity {
 				},
 			},
 		},
+	}
+}
+
+// SetPodAntiAffinity 设置Pod的反亲和性配置
+func SetPodAntiAffinity(spec v1alpha1.StandaloneSpec, labels map[string]string) *corev1.Affinity {
+	if spec.Pod.Affinity == nil {
+		return nil
+	}
+
+	// 设置Pod反亲和性
+	podAntiAffinity := &corev1.PodAntiAffinity{
+		PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+			{
+				Weight: 100,
+				PodAffinityTerm: corev1.PodAffinityTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: labels,
+					},
+					TopologyKey: *spec.Pod.Affinity.TopologyKey,
+				},
+			},
+		},
+	}
+
+	return &corev1.Affinity{
+		PodAntiAffinity: podAntiAffinity,
 	}
 }
