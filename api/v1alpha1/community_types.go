@@ -66,10 +66,12 @@ type MetricsCollection struct {
 type Service struct {
 	Type corev1.ServiceType `json:"type,omitempty"`
 
-	// 如果使用LB，需要指定外部流量策略，否则会因为NAT/SNAT问题导致客户端连接时断连、连接 reset 、连接超时、多节点访问时会话不稳定等问题
+	// 指定外部流量策略，否则会因为NAT/SNAT问题导致客户端连接时断连、连接 reset 、连接超时、多节点访问时会话不稳定等问题
 	// 参考：https://kubernetes.io/zh-cn/docs/concepts/services-networking/service/#external-traffic-policy
 	// +optional
 	ExternalTrafficPolicy corev1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty"`
+	// +optional
+	InternalTrafficPolicy corev1.ServiceInternalTrafficPolicyType `json:"internalTrafficPolicy,omitempty"`
 	// +optional
 	Ports []corev1.ServicePort `json:"ports,omitempty"`
 	// +optional

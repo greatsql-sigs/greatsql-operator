@@ -90,6 +90,8 @@ spec:
         targetPort: 33060
         protocol: TCP
     type: LoadBalancer
+    internalTrafficPolicy: Local
+    externalTrafficPolicy: Local
     dnsPolicy: ClusterFirst
     upgradeOptions:
       versionServiceEndpoint: ""

@@ -8,7 +8,6 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: greatsql
   annotations:
-
 spec:
   size: 1
   version: "8.0.32-26"
@@ -19,7 +18,6 @@ spec:
       image: greatsql/greatsql:8.0.32-26
       imagePullPolicy: IfNotPresent
       imagePullSecrets:
-        - name: greatsql-secret
       resources:
         requests:
           cpu: "2"
@@ -75,6 +73,8 @@ spec:
       maxUnavailable: 1
   service:
     type: LoadBalancer
+    internalTrafficPolicy: Local
+    externalTrafficPolicy: Local
     ports:
       - name: mysql
         protocol: TCP

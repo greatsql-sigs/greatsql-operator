@@ -25,7 +25,7 @@ kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operat
 kubectl apply -f https://raw.githubusercontent.com/greatsql-sigs/greatsql-operator/main/example/cluster/groupreplicationcluster.yaml
 
 # 验证部署
-kubectl get pods -n greatsql
+kubectl get pods -n greatsql-system
 ```
 
 ### helm快速安装
@@ -47,12 +47,9 @@ helm uninstall greatsql -n greatsql-system
 kubectl delete ns greatsql-system
 
 # 卸载 CRD
-kubectl delete crd Standalones.greatsql.io
-kubectl delete crd groupreplicationclusters.greatsql.io
+kubectl delete crd standalones.database.greatsql.cn
+kubectl delete crd groupreplicationclusters.database.greatsql.cn
 
-# 卸载 webhook
-kubectl delete mutatingwebhookconfiguration mgroupreplicationcluster.kb.io
-kubectl delete validatingwebhookconfiguration vgroupreplicationcluster.kb.io
 ```
 
 ## 其他文档

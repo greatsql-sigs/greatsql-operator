@@ -19,6 +19,12 @@ func BuildServices(name, nameSpace string, service v1alpha1.Service) *corev1.Ser
 				TargetPort: intstr.FromInt(3306),
 				Protocol:   corev1.ProtocolTCP,
 			},
+			{
+				Name:       "mysql-admin",
+				Port:       33060,
+				TargetPort: intstr.FromInt(33060),
+				Protocol:   corev1.ProtocolTCP,
+			},
 		}
 	}
 
@@ -50,10 +56,12 @@ func BuildServices(name, nameSpace string, service v1alpha1.Service) *corev1.Ser
 			Annotations: service.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Type:              serviceType,
-			Ports:             ports,
-			Selector:          selector,
-			LoadBalancerClass: service.LoadBalancerClass,
+			Type:                  serviceType,
+			InternalTrafficPolicy: &service.InternalTrafficPolicy,
+			ExternalTrafficPolicy: service.ExternalTrafficPolicy,
+			Ports:                 ports,
+			Selector:              selector,
+			LoadBalancerClass:     service.LoadBalancerClass,
 		},
 	}
 }
