@@ -22,6 +22,11 @@ import (
  * @description: kubernetes deployment operation
  */
 
+// stringPtr 返回字符串的指针
+func stringPtr(s string) *string {
+	return &s
+}
+
 // NewDeployment returns a new deployment
 func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *appsv1.Deployment {
 	labels := map[string]string{
@@ -32,10 +37,11 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 	var affinity *corev1.Affinity
 
 	if cr.Spec.Pod.Affinity == nil {
-		cr.Spec.Pod.Affinity = nil
-	} else {
-		affinity = schedule.SetAffinity(cr.Spec, labels)
+		cr.Spec.Pod.Affinity = &v1alpha1.Affinity{
+			TopologyKey: stringPtr("kubernetes.io/hostname"),
+		}
 	}
+	affinity = schedule.SetPodAntiAffinity(cr.Spec, labels)
 
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{

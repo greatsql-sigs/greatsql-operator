@@ -33,6 +33,19 @@ spec:
       labels:
         control-plane: greatsql-controller-manager
     spec:
+      affinity:
+        podAntiAffinity:
+          # 使用preferredDuringSchedulingIgnoredDuringExecution策略，这意味着调度器会尽量满足反亲和性要求，但如果无法满足也不会阻止Pod调度
+          # 权重设置为100，表示这是一个重要的调度要求
+          # 使用control-plane: greatsql-controller-manager标签来匹配operator的Pod
+          # 使用kubernetes.io/hostname作为拓扑键，确保Pod分布在不同节点上
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  control-plane: greatsql-controller-manager
+              topologyKey: kubernetes.io/hostname
       # TODO(user): Uncomment the following code to configure the nodeAffinity expression
       # according to the platforms which are supported by your solution.
       # It is considered best practice to support multiple architectures. You can
@@ -67,6 +80,10 @@ spec:
         image: registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
         args:
         - --leader-elect
+        env:
+          # 控制operator的协调（reconciliation）循环的时间间隔，10s
+        - name: RECONCILIATION_INTERVAL
+          value: "10s"
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
