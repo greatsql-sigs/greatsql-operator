@@ -80,18 +80,20 @@ spec:
             requests:
               # default storage size is 5Gi
               storage: 5Gi
+    type: LoadBalancer
+    internalTrafficPolicy: Local
+    externalTrafficPolicy: Local
     ports:
       - name: mysql
         port: 3306
         targetPort: 3306
         protocol: TCP
-      - name: mgr-node-comm
+      - name: mgr-node-communication
         port: 33060
         targetPort: 33060
         protocol: TCP
-    type: LoadBalancer
-    internalTrafficPolicy: Local
-    externalTrafficPolicy: Local
+    selector:
+      app: greatsql
     dnsPolicy: ClusterFirst
     upgradeOptions:
       versionServiceEndpoint: ""

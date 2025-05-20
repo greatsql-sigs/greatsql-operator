@@ -79,6 +79,9 @@ spec:
       - name: mysql
         protocol: TCP
         port: 3306
+      - name: mysql-admin
+        protocol: TCP
+        port: 33060
     selector:
       app: greatsql
     loadBalancerClass: "service.k8s.aws/nlb"
