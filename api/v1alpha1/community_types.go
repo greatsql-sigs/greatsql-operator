@@ -48,9 +48,16 @@ type Proxy struct {
 	Pod     `json:",inline"`
 }
 
-// SchedulerBuckup defines the desired state of SchedulerBuckup
-// TODO: SchedulerBuckup is not implemented yet
-type SchedulerBuckup struct {
+// SchedulingBuckup defines the desired state of SchedulingBuckup
+// TODO: SchedulingBuckup is not implemented yet
+type SchedulingBuckup struct {
+	//+kube:validation:Enum=true, false
+	Enable *bool `json:"enable,omitempty"`
+}
+
+// Restore defines the desired state of Restore
+// TODO: Restore is not implemented yet
+type Restore struct {
 	//+kube:validation:Enum=true, false
 	Enable *bool `json:"enable,omitempty"`
 }

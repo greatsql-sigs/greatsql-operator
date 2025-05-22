@@ -32,8 +32,11 @@ spec:
 ## Proxy
 // TODO: Proxy is not implemented yet
 
-## SchedulerBuckup
-// TODO: SchedulerBuckup is not implemented yet
+## SchedulingBuckup
+// TODO: SchedulingBuckup is not implemented yet
+
+## Restore
+// TODO: Restore is not implemented yet
 
 ## MetricsCollection
 // TODO: MetricsCollection is not implemented yet
