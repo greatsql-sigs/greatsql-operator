@@ -19,11 +19,13 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"time"
+
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
-	"reflect"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -234,20 +236,21 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 
 	return nil
 }
-
-// computeStatus updates the status of the Standalone
 func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.Standalone) (*v1alpha1.StandaloneStatus, error) {
 	r.Log.Info("Computing status")
 
 	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
 		return nil, nil
 	}
+
+	// 初始化状态结果
 	result := &v1alpha1.StandaloneStatus{
 		Status: v1alpha1.Status{
-			Phase: v1alpha1.PhaseInitializing,
+			Phase: v1alpha1.PhaseInitializing, // 默认状态
 		},
 	}
-	result.Status.Ready = 0
+
+	stateMachine := pkg.NewStateMachine(&result.Status)
 
 	deployList := &appsv1.DeploymentList{}
 	err := r.Client.List(ctx, deployList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
@@ -257,18 +260,46 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 
 	switch len(deployList.Items) {
 	case 0:
-		result.Status.Phase = v1alpha1.PhaseInitializing
 		r.Log.Info("no deployment found")
+		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+		stateMachine.SetStatusMessage("Waiting for deployment to be created")
+		stateMachine.SetStatusReason("NotFound")
+		stateMachine.SetReady(0)
+
 	case 1:
 		status := deployList.Items[0].Status
-		result.Status.Ready = status.ReadyReplicas
+		ready := status.ReadyReplicas
+		stateMachine.SetReady(ready)
+
 		r.Log.Info("got deployment status", "status", status)
-		result.Status.Phase = determineState(status.ReadyReplicas)
+
+		// 通过 Ready 数决定状态
+		switch {
+		case ready == 0:
+			_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+			stateMachine.SetStatusMessage("Pods not ready yet")
+			stateMachine.SetStatusReason("ReadinessZero")
+		case ready > 0:
+			_ = stateMachine.Transition(v1alpha1.PhaseReady)
+			stateMachine.SetStatusMessage("Pods are ready")
+			stateMachine.SetStatusReason("Healthy")
+		default:
+			_ = stateMachine.Transition(v1alpha1.PhaseError)
+			stateMachine.SetStatusMessage("Unexpected readiness state")
+			stateMachine.SetStatusReason("Unknown")
+		}
+
 	default:
 		r.Log.Info("too many deployments found", "count", len(deployList.Items))
-		result.Status.Phase = v1alpha1.PhaseError
-		return result, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
+		_ = stateMachine.Transition(v1alpha1.PhaseError)
+		stateMachine.SetStatusMessage(fmt.Sprintf("Expected 1 deployment, got %d", len(deployList.Items)))
+		stateMachine.SetStatusReason("MultipleDeployments")
+		return &v1alpha1.StandaloneStatus{Status: *stateMachine.GetStatus()}, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
 	}
+
+	// 更新 Status
+	newStatus := *stateMachine.GetStatus()
+	result.Status = newStatus
 
 	if !reflect.DeepEqual(cr.Status, *result) {
 		cr.Status = *result
@@ -280,7 +311,6 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 	}
 
 	r.Log.Info("Status updated", "status", result)
-
 	return result, nil
 }
 
