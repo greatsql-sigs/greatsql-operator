@@ -92,17 +92,6 @@ spec:
   
   service:
     type: LoadBalancer
-    externalTrafficPolicy: Local
-    internalTrafficPolicy: Local
-    ports:
-      - name: mysql
-        port: 3306
-        targetPort: 3306
-        protocol: TCP
-      - name: node-communication
-        port: 33060
-        targetPort: 33060
-        protocol: TCP
     selector:
       app: greatsql
     loadBalancerClass: "service.k8s.aws/nlb"

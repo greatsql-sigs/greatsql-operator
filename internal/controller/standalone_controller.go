@@ -53,11 +53,6 @@ type StandaloneReconciler struct {
 	ResourceHelper *kube.ResourceHelper
 }
 
-const (
-	// GreatSqlFinalizer is the finalizer name for the GreatSql
-	standaloneFinalizer string = "finalizer.standalone.database.greatsql.cn"
-)
-
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones/finalizers,verbs=update
@@ -120,7 +115,7 @@ func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1.Standalone) error {
 	log := r.Log.WithValues("standalone", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
 
-	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, standaloneFinalizer, log, func(ctx context.Context, obj *v1alpha1.Standalone) error {
+	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, log, func(ctx context.Context, obj *v1alpha1.Standalone) error {
 
 		// 删除 Service
 		svc := &corev1.Service{}
@@ -144,7 +139,7 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 // createRequiredResources creates the required resources for the Standalone
 func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
 	// 创建 Service
-	service := network.BuildServices(req.Name, req.Namespace, cr.Spec.Service)
+	service := network.BuildServices(req.Name, cr.Spec.Service)
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, service); err != nil {
 		r.Log.Error(err, "Could not create service")
 		return err
@@ -159,7 +154,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 		mysql.WithReportHost(""),
 		mysql.WithReportPort(3306),
 		mysql.WithInnodbBufferPoolSize("1G"),
-		mysql.WithSinglePrimaryMode(true),
+		mysql.WithSinglePrimaryMode(false),
 		mysql.WithGroupReplicationConsistency("EVENTUAL"),
 		mysql.WithGroupReplicationFlowControl("QUOTA"),
 	)
@@ -176,7 +171,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 
 	// 创建 PVC
 	size := cr.Spec.Size
-	pvcs, err := storage.BuildPersistentVolumeClaims(cr, corev1.ReadWriteOnce, storage.DefaultPersistentVolumeClaimSize, nil, int(*size))
+	pvcs, err := storage.BuildPersistentVolumeClaims(cr, cr.Spec.Storages.AccessModes, storage.DefaultPersistentVolumeClaimSize, nil, int(*size))
 	if err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaims")
 		return err
@@ -312,14 +307,6 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 
 	r.Log.Info("Status updated", "status", result)
 	return result, nil
-}
-
-// determineState helps decide the state based on ready replicas
-func determineState(readyReplicas int32) v1alpha1.Phase {
-	if readyReplicas == 1 {
-		return v1alpha1.PhaseReady
-	}
-	return v1alpha1.PhaseInitializing
 }
 
 // SetupWithManager sets up the controller with the Manager.

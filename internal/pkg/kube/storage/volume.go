@@ -19,7 +19,7 @@ import (
 const DefaultPersistentVolumeClaimSize = "5Gi"
 
 // BuildPersistentVolumeClaim 单个 PVC 通用规范
-func BuildPersistentVolumeClaim(cr interface{}, mode corev1.PersistentVolumeAccessMode, size string, storageClassName *string) (corev1.PersistentVolumeClaim, error) {
+func BuildPersistentVolumeClaim(cr any, mode corev1.PersistentVolumeAccessMode, size string, storageClassName *string) (corev1.PersistentVolumeClaim, error) {
 	if size == "" {
 		size = DefaultPersistentVolumeClaimSize
 	}
@@ -52,7 +52,7 @@ func BuildPersistentVolumeClaim(cr interface{}, mode corev1.PersistentVolumeAcce
 }
 
 // BuildPersistentVolumeClaims 多个 PVC 的通用规范
-func BuildPersistentVolumeClaims(cr interface{}, mode corev1.PersistentVolumeAccessMode, size string, storageClassName *string, count int) ([]corev1.PersistentVolumeClaim, error) {
+func BuildPersistentVolumeClaims(cr any, accessModes []corev1.PersistentVolumeAccessMode, size string, storageClassName *string, count int) ([]corev1.PersistentVolumeClaim, error) {
 	if size == "" {
 		size = DefaultPersistentVolumeClaimSize
 	}
@@ -62,7 +62,7 @@ func BuildPersistentVolumeClaims(cr interface{}, mode corev1.PersistentVolumeAcc
 	}
 
 	var pvcs []corev1.PersistentVolumeClaim
-	for i := 0; i < count; i++ {
+	for i := range count {
 		ObjectMeta := metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%d", cr.(metav1.Object).GetName(), i),
 			Namespace: cr.(metav1.Object).GetNamespace(),
@@ -71,9 +71,7 @@ func BuildPersistentVolumeClaims(cr interface{}, mode corev1.PersistentVolumeAcc
 		pvc := corev1.PersistentVolumeClaim{
 			ObjectMeta: ObjectMeta,
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{
-					mode,
-				},
+				AccessModes: accessModes,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceStorage: quantity,

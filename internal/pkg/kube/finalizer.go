@@ -10,16 +10,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-03-18 23:52:44
- * @file: finalizer.go
- * @description: resource finalizer
- */
+const finalizer = "greatsql-operator.greatsql-sigs.io/finalizer"
+
+// HandleFinalizerWithCleanup handles the finalizer for a Kubernetes object.
 func HandleFinalizerWithCleanup[T client.Object](
 	ctx context.Context, c client.Client,
-	obj T, finalizer string,
-	log logr.Logger, cleanupFn func(context.Context, T) error) error {
+	obj T, log logr.Logger, cleanupFn func(context.Context, T) error) error {
 
 	if reflect.ValueOf(obj).IsNil() {
 		log.Error(nil, "object is nil")

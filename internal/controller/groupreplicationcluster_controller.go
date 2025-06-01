@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 
@@ -52,11 +53,6 @@ type GroupReplicationClusterReconciler struct {
 	ResourceHelper *kube.ResourceHelper
 }
 
-const (
-	// GreatSqlFinalizer is the finalizer name for the GreatSql
-	groupReplicationClusterFinalizer string = "finalizer.groupreplicationcluster.database.greatsql.cn"
-)
-
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/finalizers,verbs=update
@@ -69,75 +65,77 @@ const (
 // move the current state of the cluster closer to the desired state.
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
+
 func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("Reconciling GroupReplicationCluster...")
+	r.Log.Info("Reconciling GroupReplicationCluster", "name", req.NamespacedName)
 
 	mgr := &v1alpha1.GroupReplicationCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, mgr); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Error(err, "GroupReplicationCluster resource not found. Ignoring since object must be deleted")
+			r.Log.Info("Resource deleted, skip", "name", req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
-		r.Log.Error(err, "unable to fetch GroupReplicationCluster")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, err
 	}
 
+	// 初始化状态机
 	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
 
-	// 验证集群配置
 	if err := mgr.Spec.ValidateClusterSpec(); err != nil {
-		r.Log.Error(err, "invalid cluster specification")
-		r.EventRecorder.Event(mgr, "Warning", "InvalidSpec", err.Error())
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("InvalidSpec")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "InvalidSpec", err.Error(), err)
 	}
 
 	if err := r.handleFinalizer(ctx, mgr); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("FinalizerError")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "FinalizerError", err.Error(), err)
 	}
 
-	// 如果状态是错误状态，尝试重新初始化
 	if mgr.Status.Status.Phase == v1alpha1.PhaseError {
-		if err := stateMachine.Transition(v1alpha1.PhaseInitializing); err != nil {
-			r.Log.Error(err, "failed to transition to initializing state")
-		}
+		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
 	}
 
 	sts := &appsv1.StatefulSet{}
 	if err := r.Client.Get(ctx, req.NamespacedName, sts); err != nil {
 		if err := r.createResources(ctx, req, mgr); err != nil {
-			stateMachine.SetStatusMessage(err.Error())
-			stateMachine.SetStatusReason("CreateResourceError")
-			if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-				r.Log.Error(err, "failed to transition to error state")
-			}
 			return ctrl.Result{}, err
 		}
 	}
 
-	// 更新状态
 	if err := r.Client.Status().Update(ctx, mgr); err != nil {
-		r.Log.Error(err, "failed to update status")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
+func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *pkg.StateMachine, phase v1alpha1.Phase, reason, message string, err error) error {
+	stateMachine.SetStatusMessage(message)
+	stateMachine.SetStatusReason(reason)
+	_ = stateMachine.Transition(phase)
+	return err
+}
+
+func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
+	_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+
+	if err := r.createSecret(ctx, req, mgr); err != nil {
+		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
+	}
+
+	if mgr.Spec.IsSingleMode() {
+		return r.createSinglePrimaryModeResources(ctx, req, mgr)
+	} else if mgr.Spec.IsMultipleMode() {
+		return r.createMultiplePrimaryModeResources(ctx, req, mgr)
+	}
+
+	return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "UnsupportedMode", "unsupported cluster mode", fmt.Errorf("unsupported cluster mode: %s", mgr.Spec.Mode))
+}
+
 // handleFinalizer handles the finalizer of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1.GroupReplicationCluster) error {
 	log := r.Log.WithValues("groupreplicationcluster", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
 
-	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, groupReplicationClusterFinalizer, log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
+	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
 		// 删除 Service
 		svc := &corev1.Service{}
 		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
@@ -165,135 +163,46 @@ func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context,
 	})
 }
 
-// createResources creates the resources for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+	steps := []struct {
+		name string
+		fn   func() error
+	}{
+		{"create ConfigMap", func() error { return r.createConfigMap(ctx, req, mgr, 0) }},
+		{"create PVC", func() error { return r.createPersistentVolumeClaim(ctx, mgr, 0) }},
+		{"create StatefulSet", func() error { return r.createStatefulSet(ctx, req, mgr, 0) }},
+		{"wait Pod ready", func() error { return r.waitForPodsReady(ctx, req) }},
+		{"init cluster", func() error { return r.initializeSingleMasterCluster(mgr) }},
+	}
+
 	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
-
-	// 设置初始状态
-	if err := stateMachine.Transition(v1alpha1.PhaseInitializing); err != nil {
-		r.Log.Error(err, "failed to transition to initializing state")
-	}
-
-	// Create common resources first
-	if err := r.createSecret(ctx, req, mgr); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("CreateSecretError")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
+	for _, step := range steps {
+		if err := step.fn(); err != nil {
+			return r.transitionWithError(stateMachine, v1alpha1.PhaseError, step.name+"Error", err.Error(), err)
 		}
-		return err
 	}
 
-	// 根据集群模式创建资源
-	if mgr.Spec.IsSingleMode() {
-		return r.createSingleMasterModeResources(ctx, req, mgr)
-	} else if mgr.Spec.IsMultipleMode() {
-		return r.createMultipleMasterModeResources(ctx, req, mgr)
-	}
-
-	stateMachine.SetStatusMessage("unsupported cluster mode")
-	stateMachine.SetStatusReason("UnsupportedMode")
-	if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-		r.Log.Error(err, "failed to transition to error state")
-	}
-	return fmt.Errorf("unsupported cluster mode: %s", mgr.Spec.Mode)
-}
-
-// createSingleMasterModeResources 创建单主模式的资源
-func (r *GroupReplicationClusterReconciler) createSingleMasterModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
-
-	// 创建 ConfigMap
-	if err := r.createConfigMap(ctx, req, mgr, 0); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("CreateConfigMapError")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return err
-	}
-
-	// 创建 PVC
-	if err := r.createPersistentVolumeClaim(ctx, mgr, 0); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("CreatePVCError")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return err
-	}
-
-	// 创建 StatefulSet
-	if err := r.createStatefulSet(ctx, req, mgr, 0); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("CreateStatefulSetError")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return err
-	}
-
-	// 等待 Pod 就绪
-	if err := r.waitForPodsReady(ctx, req); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("PodNotReady")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return err
-	}
-
-	// 设置运行状态
-	if err := stateMachine.Transition(v1alpha1.PhaseRunning); err != nil {
-		r.Log.Error(err, "failed to transition to running state")
-	}
-
-	// 初始化单节点集群
-	if err := r.initializeSingleMasterCluster(mgr); err != nil {
-		stateMachine.SetStatusMessage(err.Error())
-		stateMachine.SetStatusReason("InitializeClusterError")
-		if err := stateMachine.Transition(v1alpha1.PhaseError); err != nil {
-			r.Log.Error(err, "failed to transition to error state")
-		}
-		return err
-	}
-
-	// 设置就绪状态
-	if err := stateMachine.Transition(v1alpha1.PhaseReady); err != nil {
-		r.Log.Error(err, "failed to transition to ready state")
-	}
-
+	_ = stateMachine.Transition(v1alpha1.PhaseReady)
 	return nil
 }
 
-// createMultipleMasterModeResources 创建多主模式的资源
-func (r *GroupReplicationClusterReconciler) createMultipleMasterModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	totalMembers := mgr.Spec.GetTotalMembers()
-
-	// 创建所有节点的资源
-	for ordinal := int32(0); ordinal < totalMembers; ordinal++ {
-		// 创建 ConfigMap
-		if err := r.createConfigMap(ctx, req, mgr, int(ordinal)); err != nil {
+// createMultiplePrimaryModeResources 创建多主模式的资源
+func (r *GroupReplicationClusterReconciler) createMultiplePrimaryModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+	total := mgr.Spec.GetTotalMembers()
+	for i := 0; i < int(total); i++ {
+		if err := r.createConfigMap(ctx, req, mgr, i); err != nil {
 			return err
 		}
-
-		// 创建 PVC
-		if err := r.createPersistentVolumeClaim(ctx, mgr, int(ordinal)); err != nil {
+		if err := r.createPersistentVolumeClaim(ctx, mgr, i); err != nil {
 			return err
 		}
-
-		// 创建 StatefulSet
-		if err := r.createStatefulSet(ctx, req, mgr, int(ordinal)); err != nil {
+		if err := r.createStatefulSet(ctx, req, mgr, i); err != nil {
 			return err
 		}
 	}
-
-	// 等待所有 Pod 就绪
 	if err := r.waitForPodsReady(ctx, req); err != nil {
 		return err
 	}
-
-	// 初始化多节点集群
 	return r.initializeMultipleMasterCluster(mgr)
 }
 
@@ -378,12 +287,18 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 
 // createPersistentVolumeClaim creates a PersistentVolumeClaim for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
-	pvc, err := storage.BuildPersistentVolumeClaim(mgr, corev1.ReadWriteOnce, storage.DefaultPersistentVolumeClaimSize, nil)
+	pvcs, err := storage.BuildPersistentVolumeClaims(mgr, mgr.Spec.Pod.Storages.AccessModes, *mgr.Spec.Pod.Storages.Size, mgr.Spec.Pod.Storages.StorageClassName, ordinal)
+
 	if err != nil {
 		r.Log.Error(err, "Could not create persistentVolumeClaim")
 		return err
 	}
-	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, &pvc)
+	for _, pvc := range pvcs {
+		if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, &pvc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
@@ -417,12 +332,12 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 }
 
 // createService creates a Service for the GroupReplicationCluster
-// func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-// 	service := kube.BuildServices(req.Name, req.Namespace, mgr.Spec.ClusterSpec.)
-// 	service.Name = fmt.Sprintf("%s-headless", req.Name)
-// 	service.Spec.ClusterIP = corev1.ClusterIPNone
-// 	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
-// }
+func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+	service := network.BuildServices(req.Name, *mgr.Spec.Service)
+	service.Name = fmt.Sprintf("%s-headless", req.Name)
+	service.Spec.ClusterIP = corev1.ClusterIPNone
+	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
+}
 
 // initializeSingleMasterCluster 初始化单节点集群
 func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v1alpha1.GroupReplicationCluster) error {
