@@ -1194,6 +1194,14 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  externalTrafficPolicy:
+                    description: |-
+                      指定外部流量策略，否则会因为NAT/SNAT问题导致客户端连接时断连、连接 reset 、连接超时、多节点访问时会话不稳定等问题
+                      参考：https://kubernetes.io/zh-cn/docs/concepts/services-networking/service/#external-traffic-policy
+                    type: string
+                  internalTrafficPolicy:
+                    description: for backwards compat
+                    type: string
                   loadBalancerClass:
                     type: string
                   ports:

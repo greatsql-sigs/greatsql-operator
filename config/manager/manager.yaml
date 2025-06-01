@@ -68,6 +68,9 @@ spec:
       #               - linux
       securityContext:
         runAsNonRoot: true
+        # fix the error "open /var/run/secrets/kubernetes.io/serviceaccount/token: permission denied" when deploying projects on older versions of Kubernetes
+        # view details: https://github.com/kubernetes/kubernetes/pull/89193
+        fsGroup: 65532
         # TODO(user): For common cases that do not require escalating privileges
         # it is recommended to ensure that all your Pods/Containers are restrictive.
         # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
@@ -79,7 +82,8 @@ spec:
       - name: manager
         image: registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
         args:
-        - --leader-elect
+          - --leader-elect=true
+          - --leader-elect-namespace=greatsql-system
         env:
           # 控制operator的协调（reconciliation）循环的时间间隔，10s
         - name: RECONCILIATION_INTERVAL
