@@ -4,7 +4,7 @@ metadata:
   labels:
     control-plane: greatsql-controller-manager
     app.kubernetes.io/name: namespace
-    app.kubernetes.io/instance: system
+    app.kubernetes.io/instance: greatsql-controller-manager
     app.kubernetes.io/component: manager
     app.kubernetes.io/created-by: greatsql
     app.kubernetes.io/part-of: greatsql
