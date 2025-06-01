@@ -12,7 +12,7 @@ func SetPodAffinity(cr any, labels map[string]string) *corev1.Affinity {
 
 	switch spec := cr.(type) {
 	case v1alpha1.Standalone:
-		topologyKey = spec.Spec.Pod.Affinity.TopologyKey
+		topologyKey = spec.Spec.Affinity.TopologyKey
 	case v1alpha1.GroupReplicationCluster:
 		topologyKey = spec.Spec.Affinity.TopologyKey
 	default:

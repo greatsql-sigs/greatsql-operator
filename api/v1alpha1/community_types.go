@@ -101,19 +101,19 @@ type Storage struct {
 // Scheduling 调度策略
 type Scheduling struct {
 	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+	Affinity *Affinity `json:"affinity,omitempty"` // 亲和性和反亲和性规则
 	// +optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"` // 节点选择器
 	// +optional
-	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"` // 容忍规则
 	// +optional
-	SchedulerName string `json:"schedulerName,omitempty"`
+	SchedulerName string `json:"schedulerName,omitempty"` // 调度器名称
 	// +optional
-	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"` // 容器终止宽限期，单位为秒
 	// +optional
-	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"` // Pod 安全上下文
 	// +optional
-	PriorityClassName *string `json:"priorityClassName,omitempty"`
+	PriorityClassName *string `json:"priorityClassName,omitempty"` // Pod 优先级类名称
 }
 
 // Upgrade 升级策略
@@ -160,24 +160,15 @@ type Container struct {
 // Pod 基础配置
 type Pod struct {
 	// 基础配置
-	Version            string      `json:"version,omitempty"`            // 版本信息
-	ServiceAccountName string      `json:"serviceAccountName,omitempty"` // ServiceAccount 名称
-	ServiceName        string      `json:"serviceName,omitempty"`        // Service 名称
-	Containers         []Container `json:"containers,omitempty"`         // 容器配置列表
-	Storages           []Storage   `json:"storages,omitempty"`           // 存储配置列表
-	// +optional
-	Affinity *Affinity `json:"affinity,omitempty"` // Pod 亲和性配置
-	// +optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"` // 节点选择器
-	// +optional
-	Tolerations []corev1.Toleration `json:"tolerations,omitempty"` // 容忍配置
-	// +optional
-	SchedulerName                 string                     `json:"schedulerName,omitempty"`                 // 调度器名称
-	TerminationGracePeriodSeconds *int64                     `json:"terminationGracePeriodSeconds,omitempty"` // 终止宽限期
-	PodSecurityContext            *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`            // Pod 安全上下文
+	Version            string           `json:"version,omitempty"`            // 版本信息
+	ServiceAccountName string           `json:"serviceAccountName,omitempty"` // ServiceAccount 名称
+	ServiceName        string           `json:"serviceName,omitempty"`        // Service 名称
+	Containers         []Container      `json:"containers,omitempty"`         // 容器配置列表
+	*Scheduling        `json:",inline"` // 调度配置
 	// +optional
 	DnsPolicy     corev1.DNSPolicy     `json:"dnsPolicy,omitempty"`     // DNS 策略
 	RestartPolicy corev1.RestartPolicy `json:"restartPolicy,omitempty"` // 重启策略
+	Storages      Storage              `json:"storages,omitempty"`      // 存储配置列表
 }
 
 // Affinity defines the affinity/anti-affinity rules for the pod.

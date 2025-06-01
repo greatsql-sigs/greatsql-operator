@@ -20,8 +20,11 @@ spec:
       imagePullSecrets:
       resources:
         requests:
-          cpu: "2"
           memory: "2Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
       startupProbe:
         tcpSocket:
           port: 3306
@@ -32,6 +35,11 @@ spec:
           port: 3306
         initialDelaySeconds: 5
         periodSeconds: 10
+      livenessProbe:
+        tcpSocket:
+          port: 3306
+        initialDelaySeconds: 30
+        periodSeconds: 10
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
@@ -41,13 +49,8 @@ spec:
           valueFrom:
             secretKeyRef:
               name: greatsql-secret
-              key: root-password
-  storages:
-    - name: greatsql-storage
-      storageClassName: ebs-gp3-sc
-      accessModes: ["ReadWriteOnce"]
-      volumeMode: Filesystem
-      size: "10Gi"
+              key: MYSQL_ROOT_PASSWORD
+
   affinity:
     antiAffinityTopologyKey: "kubernetes.io/hostname"
   nodeSelector:
@@ -63,6 +66,14 @@ spec:
     fsGroup: 1000
   dnsPolicy: ClusterFirst
   restartPolicy: Always
+  priorityClassName: greatsql-priority
+
+  storages:
+    storageClassName: ebs-gp3-sc
+    accessModes: ["ReadWriteOnce"]
+    volumeMode: Filesystem
+    size: "10Gi"
+
   upgrade:
     versionServiceEndpoint: ""
     apply: ""
@@ -71,15 +82,16 @@ spec:
     rollingUpdate:
       partition: 0
       maxUnavailable: 1
+
   service:
     type: LoadBalancer
-    internalTrafficPolicy: Local
     externalTrafficPolicy: Local
+    internalTrafficPolicy: Local
     ports:
       - name: mysql
         protocol: TCP
         port: 3306
-      - name: mysql-admin
+      - name: mysql-x-protocol
         protocol: TCP
         port: 33060
     selector:

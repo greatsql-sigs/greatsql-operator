@@ -30,7 +30,7 @@ import (
 // StandaloneSpec 单节点配置
 type StandaloneSpec struct {
 	Size           *int32 `json:"size,omitempty"`
-	Pod            `json:",omitempty"`
+	*Pod           `json:",inline"`
 	Upgrade        Upgrade        `json:"upgrade,omitempty"`
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty"`
 	Service        Service        `json:"service,omitempty"`

@@ -1178,6 +1178,8 @@ spec:
                         type: string
                     type: object
                 type: object
+              priorityClassName:
+                type: string
               restartPolicy:
                 description: |-
                   RestartPolicy describes how the container should be restarted.
@@ -1289,23 +1291,21 @@ spec:
               serviceName:
                 type: string
               storages:
-                items:
-                  description: Storage 存储配置
-                  properties:
-                    accessModes:
-                      items:
-                        type: string
-                      type: array
-                    size:
+                description: Storage 存储配置
+                properties:
+                  accessModes:
+                    items:
                       type: string
-                    storageClassName:
-                      type: string
-                    volumeMode:
-                      description: PersistentVolumeMode describes how a volume is
-                        intended to be consumed, either Block or Filesystem.
-                      type: string
-                  type: object
-                type: array
+                    type: array
+                  size:
+                    type: string
+                  storageClassName:
+                    type: string
+                  volumeMode:
+                    description: PersistentVolumeMode describes how a volume is intended
+                      to be consumed, either Block or Filesystem.
+                    type: string
+                type: object
               terminationGracePeriodSeconds:
                 format: int64
                 type: integer

@@ -67,7 +67,7 @@ func NewDeployment(configMapName string, cr *v1alpha1.Standalone, ordinal int) *
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					Containers:                    NewContainers(cr.Name, &cr.Spec.Pod, ordinal, false),
+					Containers:                    NewContainers(cr.Name, cr.Spec.Pod, ordinal, false),
 					TerminationGracePeriodSeconds: cr.Spec.Pod.TerminationGracePeriodSeconds,
 					SchedulerName:                 cr.Spec.Pod.SchedulerName,
 					Affinity:                      affinity,
