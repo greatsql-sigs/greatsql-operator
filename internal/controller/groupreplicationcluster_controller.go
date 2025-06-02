@@ -43,6 +43,8 @@ import (
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
 	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
+	schedulingv1 "k8s.io/api/scheduling/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GroupReplicationClusterReconciler reconciles a GroupReplicationCluster object
@@ -310,8 +312,49 @@ func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx cont
 	return nil
 }
 
+// createPriorityClass 创建 PriorityClass
+func (r *GroupReplicationClusterReconciler) createPriorityClass(ctx context.Context, mgr *v1alpha1.GroupReplicationCluster) error {
+	if mgr.Spec.Pod.PriorityClassName == nil {
+		r.Log.Info("PriorityClassName is nil, skip create PriorityClass")
+		return nil
+	}
+
+	priorityClass := &schedulingv1.PriorityClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: *mgr.Spec.Pod.PriorityClassName,
+		},
+		Value: 1000000, // 设置一个较高的优先级值
+	}
+
+	// 检查 PriorityClass 是否已存在
+	existing := &schedulingv1.PriorityClass{}
+	err := r.Client.Get(ctx, client.ObjectKey{Name: priorityClass.Name}, existing)
+	if err == nil {
+		// PriorityClass 已存在，无需创建
+		return nil
+	}
+
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
+	// 创建 PriorityClass
+	if err := r.Client.Create(ctx, priorityClass); err != nil {
+		r.Log.Error(err, "Could not create PriorityClass")
+		return err
+	}
+
+	r.Log.Info("Created PriorityClass", "Name", priorityClass.Name)
+	return nil
+}
+
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
+	// 如果定义了 PriorityClassName，先创建 PriorityClass
+	if err := r.createPriorityClass(ctx, mgr); err != nil {
+		return err
+	}
+
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
 	sts, err := workload.BuildStatefulSet(mgr, configMapName, fmt.Sprintf("%s-headless", req.Name), ordinal, nil, nil)
 	if err != nil {
