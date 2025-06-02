@@ -7,8 +7,7 @@ metadata:
     app.kubernetes.io/name: greatsql-mgr
     app.kubernetes.io/instance: greatsql-mgr
     app.kubernetes.io/component: controller
-  finalizers:
-    - finalizer.greatsql.cn
+
 spec:
   mode: "single"
   member:

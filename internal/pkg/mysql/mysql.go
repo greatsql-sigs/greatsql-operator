@@ -269,3 +269,24 @@ func (m *MySQL) queryRow(query string, args ...interface{}) *sql.Row {
 	defer db.Close()
 	return db.QueryRow(query, args...)
 }
+
+// IsPrimary 检查当前节点是否为主节点
+func (m *MySQL) IsPrimary() (bool, error) {
+	query := `SELECT MEMBER_ROLE FROM performance_schema.replication_group_members 
+			  WHERE MEMBER_HOST = @@hostname`
+	var role string
+	err := m.queryRow(query).Scan(&role)
+	if err != nil {
+		return false, err
+	}
+	return role == "PRIMARY", nil
+}
+
+// GetMemberState 获取当前节点的状态
+func (m *MySQL) GetMemberState() (string, error) {
+	query := `SELECT MEMBER_STATE FROM performance_schema.replication_group_members 
+			  WHERE MEMBER_HOST = @@hostname`
+	var state string
+	err := m.queryRow(query).Scan(&state)
+	return state, err
+}

@@ -1321,6 +1321,9 @@ spec:
                     type: integer
                   reason:
                     type: string
+                  role:
+                    description: MemberRole 成员角色
+                    type: string
                 type: object
             type: object
         type: object

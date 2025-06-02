@@ -129,11 +129,12 @@ type RollingUpdate struct {
 
 // Status 状态
 type Status struct {
-	Phase   Phase  `json:"phase,omitempty"`
-	Message string `json:"message,omitempty"`
-	Reason  string `json:"reason,omitempty"`
-	Age     string `json:"age,omitempty"`
-	Ready   int32  `json:"ready,omitempty"`
+	Role    MemberRole `json:"role,omitempty"`
+	Phase   Phase      `json:"phase,omitempty"`
+	Message string     `json:"message,omitempty"`
+	Reason  string     `json:"reason,omitempty"`
+	Age     string     `json:"age,omitempty"`
+	Ready   int32      `json:"ready,omitempty"`
 }
 
 // Container 容器配置

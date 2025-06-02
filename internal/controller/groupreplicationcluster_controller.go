@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -100,13 +101,16 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 		}
 	}
 
-	if err := r.Client.Status().Update(ctx, mgr); err != nil {
+	// 计算并更新状态
+	if _, err := r.computeStatus(ctx, mgr); err != nil {
+		r.Log.Error(err, "Failed to compute status")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
+// transitionWithError 状态转换错误处理
 func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *pkg.StateMachine, phase v1alpha1.Phase, reason, message string, err error) error {
 	stateMachine.SetStatusMessage(message)
 	stateMachine.SetStatusReason(reason)
@@ -120,6 +124,11 @@ func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context,
 
 	if err := r.createSecret(ctx, req, mgr); err != nil {
 		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
+	}
+
+	// 创建Service
+	if err := r.createService(ctx, req, mgr); err != nil {
+		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
 	}
 
 	if mgr.Spec.IsSingleMode() {
@@ -462,4 +471,121 @@ func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) e
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.GroupReplicationCluster{}).
 		Complete(r)
+}
+
+func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, cr *v1alpha1.GroupReplicationCluster) (*v1alpha1.GroupReplicationClusterStatus, error) {
+	r.Log.Info("Computing status")
+
+	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
+		return nil, nil
+	}
+
+	// 初始化状态结果
+	result := &v1alpha1.GroupReplicationClusterStatus{
+		Status: v1alpha1.Status{
+			Phase: v1alpha1.PhaseInitializing, // 默认状态
+		},
+	}
+
+	stateMachine := pkg.NewStateMachine(&result.Status)
+
+	// 获取所有Pod
+	podList := &corev1.PodList{}
+	err := r.Client.List(ctx, podList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取MySQL连接信息
+	mysql := mysql.MySQL{
+		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", cr.Name, cr.Name, cr.Namespace),
+		Port:     consts.MySQLPort,
+		UserName: consts.RootUser,
+		Password: consts.MySQLRootPassWord,
+		DB:       consts.MySQLDB,
+	}
+
+	// 检查集群状态
+	isClusterExist, err := mysql.IsMGRClusterExist()
+	if err != nil {
+		r.Log.Error(err, "Failed to check cluster existence")
+		return nil, err
+	}
+
+	// 根据Pod数量和集群状态更新role
+	switch {
+	case len(podList.Items) == 0:
+		r.Log.Info("no pods found")
+		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+		stateMachine.SetStatusMessage("Waiting for pods to be created")
+		stateMachine.SetStatusReason("NotFound")
+		stateMachine.SetReady(0)
+		result.Status.Role = v1alpha1.SecondaryRole // 默认角色
+
+	case !isClusterExist:
+		r.Log.Info("cluster not initialized")
+		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+		stateMachine.SetStatusMessage("Cluster not initialized")
+		stateMachine.SetStatusReason("NotInitialized")
+		stateMachine.SetReady(0)
+		result.Status.Role = v1alpha1.SecondaryRole
+
+	default:
+		// 获取当前节点的角色
+		memberState, err := mysql.GetMemberState()
+		if err != nil {
+			r.Log.Error(err, "Failed to get member state")
+			return nil, err
+		}
+
+		// 根据memberState设置角色
+		switch memberState {
+		case "ONLINE":
+			// 检查是否是主节点
+			isPrimary, err := mysql.IsPrimary()
+			if err != nil {
+				r.Log.Error(err, "Failed to check if primary")
+				return nil, err
+			}
+			if isPrimary {
+				result.Status.Role = v1alpha1.PrimaryRole
+			} else {
+				result.Status.Role = v1alpha1.SecondaryRole
+			}
+			_ = stateMachine.Transition(v1alpha1.PhaseReady)
+			stateMachine.SetStatusMessage("Cluster is healthy")
+			stateMachine.SetStatusReason("Healthy")
+			stateMachine.SetReady(int32(len(podList.Items)))
+
+		case "RECOVERING":
+			result.Status.Role = v1alpha1.SecondaryRole
+			_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+			stateMachine.SetStatusMessage("Node is recovering")
+			stateMachine.SetStatusReason("Recovering")
+			stateMachine.SetReady(0)
+
+		default:
+			result.Status.Role = v1alpha1.SecondaryRole
+			_ = stateMachine.Transition(v1alpha1.PhaseError)
+			stateMachine.SetStatusMessage(fmt.Sprintf("Unexpected member state: %s", memberState))
+			stateMachine.SetStatusReason("InvalidState")
+			stateMachine.SetReady(0)
+		}
+	}
+
+	// 更新 Status
+	newStatus := *stateMachine.GetStatus()
+	result.Status = newStatus
+
+	if !reflect.DeepEqual(cr.Status, *result) {
+		cr.Status = *result
+		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("GreatSQL status updated: %s, role: %s", result.Status.Phase, result.Status.Role))
+		if err := r.Client.Status().Update(ctx, cr); err != nil {
+			r.Log.Error(err, "Could not update status")
+			return result, err
+		}
+	}
+
+	r.Log.Info("Status updated", "status", result)
+	return result, nil
 }
