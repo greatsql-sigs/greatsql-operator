@@ -1,6 +1,8 @@
 package network
 
 import (
+	"fmt"
+
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
@@ -8,10 +10,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildServices(cr any, service v1alpha1.Service) *corev1.Service {
+func BuildServices(cr any, service v1alpha1.Service) (*corev1.Service, error) {
+	obj, ok := cr.(metav1.Object)
+	if !ok {
+		return nil, fmt.Errorf("invalid type conversion: expected metav1.Object, got %T", cr)
+	}
 
-	name := cr.(metav1.Object).GetName()
-	ns := cr.(metav1.Object).GetNamespace()
+	name := obj.GetName()
+	ns := obj.GetNamespace()
 
 	// 设置默认端口
 	ports := []corev1.ServicePort{
@@ -70,5 +76,5 @@ func BuildServices(cr any, service v1alpha1.Service) *corev1.Service {
 			Selector:              selector,
 			LoadBalancerClass:     service.LoadBalancerClass,
 		},
-	}
+	}, nil
 }

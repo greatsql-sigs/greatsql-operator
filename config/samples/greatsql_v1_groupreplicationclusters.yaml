@@ -21,41 +21,41 @@ spec:
   serviceAccountName: default
   serviceName: greatsql-mgr-headless
 
-  containers:
-    - name: mysql
-      image: greatsql/greatsql:8.0.32-26
-      imagePullPolicy: IfNotPresent
-      resources:
-        requests:
-          memory: "2Gi"
-          cpu: "2"
-        limits:
-          memory: "8Gi"
-          cpu: "4"
-      startupProbe:
-        tcpSocket:
-          port: 3306
-        initialDelaySeconds: 5
-        periodSeconds: 20
-      readinessProbe:
-        tcpSocket:
-          port: 3306
-        initialDelaySeconds: 5
-        periodSeconds: 20
-      livenessProbe:
-        tcpSocket:
-          port: 3306
-        initialDelaySeconds: 10
-        periodSeconds: 30
-      securityContext:
-        runAsUser: 0
-        runAsGroup: 0
-      env:
-        - name: PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: greatsql-mgr-secret
-              key: MYSQL_ROOT_PASSWORD
+  container:
+    name: mysql
+    image: greatsql/greatsql:8.0.32-26
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+    startupProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 5
+      periodSeconds: 20
+    readinessProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 5
+      periodSeconds: 20
+    livenessProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    env:
+      - name: PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: greatsql-mgr-secret
+            key: MYSQL_ROOT_PASSWORD
 
   affinity:
     antiAffinityTopologyKey: "kubernetes.io/hostname"

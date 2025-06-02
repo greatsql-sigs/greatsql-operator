@@ -154,11 +154,12 @@ type Container struct {
 // Pod 基础配置
 type Pod struct {
 	// 基础配置
-	Version            string           `json:"version,omitempty"`            // 版本信息
-	ServiceAccountName string           `json:"serviceAccountName,omitempty"` // ServiceAccount 名称
-	ServiceName        string           `json:"serviceName,omitempty"`        // Service 名称
-	Containers         []Container      `json:"containers,omitempty"`         // 容器配置列表
-	*Scheduling        `json:",inline"` // 调度配置
+	Version            string `json:"version,omitempty"`            // 版本信息
+	ServiceAccountName string `json:"serviceAccountName,omitempty"` // ServiceAccount 名称
+	ServiceName        string `json:"serviceName,omitempty"`        // Service 名称
+	// TODO: 需要支持多个容器
+	Container   Container        `json:"container,omitempty"` // 容器配置列表
+	*Scheduling `json:",inline"` // 调度配置
 	// +optional
 	DnsPolicy     corev1.DNSPolicy     `json:"dnsPolicy,omitempty"`     // DNS 策略
 	RestartPolicy corev1.RestartPolicy `json:"restartPolicy,omitempty"` // 重启策略

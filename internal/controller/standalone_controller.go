@@ -24,7 +24,7 @@ import (
 
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/schedule"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -130,7 +130,34 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 			return err
 		}
 
-		// TODO: 是否需要删除 PVC？
+		// 删除 StatefulSet
+		sts := &appsv1.StatefulSet{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
+			log.Error(err, "Failed to delete StatefulSet")
+		}
+
+		// 删除 pvc
+		pvcList := &corev1.PersistentVolumeClaimList{}
+		err := r.Client.List(ctx, pvcList, client.InNamespace(obj.Namespace), client.MatchingLabels{
+			"app.kubernetes.io/name": obj.Name,
+		})
+		if err != nil {
+			log.Error(err, "Failed to list PVCs")
+		} else {
+			for _, pvc := range pvcList.Items {
+				pvc := pvc // 避免闭包引用错误
+				if err := r.Client.Delete(ctx, &pvc); err != nil {
+					log.Error(err, "Failed to delete PVC", "name", pvc.Name)
+				}
+			}
+		}
+
+		// 删除 Secret
+		secret := &corev1.Secret{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name+"-secret", obj.Namespace, secret); err != nil {
+			log.Error(err, "Failed to delete Secret")
+			return err
+		}
 
 		return nil
 	})
@@ -138,11 +165,45 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 
 // createRequiredResources creates the required resources for the Standalone
 func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
+	// 如果定义了 PriorityClassName，先创建 PriorityClass
+	if err := schedule.CreatePriorityClass(ctx, cr.Spec.Pod, r.Client); err != nil {
+		return err
+	}
 	// 创建 Service
-	service := network.BuildServices(req.Name, cr.Spec.Service)
+	service, err := network.BuildServices(cr, cr.Spec.Service)
+	if err != nil {
+		r.Log.Error(err, "Could not build service")
+		return err
+	}
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, service); err != nil {
 		r.Log.Error(err, "Could not create service")
 		return err
+	}
+
+	// 创建 secret（只在有 secretKeyRef 时创建）
+	secretEnvs := []corev1.EnvVar{}
+	secretName := req.Name + "-secret"
+
+	// 从 cr.Spec.Pod.Container.Envs 中获取需要创建 secret 的环境变量
+	if cr.Spec.Pod != nil && cr.Spec.Pod.Container.Envs != nil {
+		for _, env := range cr.Spec.Pod.Container.Envs {
+			if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
+				secretEnvs = append(secretEnvs, env)
+			}
+		}
+	}
+
+	if len(secretEnvs) > 0 {
+		secret, err := kube.NewSecretEnv(cr, r.Scheme, secretName, req.Namespace, secretEnvs)
+		if err != nil {
+			r.Log.Error(err, "Could not create secret from envs")
+		}
+		if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, secret); err != nil {
+			r.Log.Error(err, "Could not create secret")
+			return err
+		}
+	} else {
+		r.Log.Info("No secretKeyRef found in envs, skipping secret creation")
 	}
 
 	// 创建 MySQL 配置
@@ -169,59 +230,38 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 		return err
 	}
 
-	// 创建 PVC
-	size := cr.Spec.Size
-	pvcs, err := storage.BuildPersistentVolumeClaims(cr, cr.Spec.Storages.AccessModes, storage.DefaultPersistentVolumeClaimSize, nil, int(*size))
-	if err != nil {
-		r.Log.Error(err, "Could not create persistentVolumeClaims")
-		return err
-	}
-	for _, pvc := range pvcs {
-		if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, &pvc); err != nil {
-			r.Log.Error(err, "Could not create persistentVolumeClaim")
-			return err
-		}
-	}
-
-	volumeBuilder := func(cr interface{}) ([]corev1.Volume, error) {
-		standalone := cr.(*v1alpha1.Standalone)
-		var volumes []corev1.Volume
-
-		// 为每个容器创建对应的卷
-		for i, container := range standalone.Spec.Pod.Containers {
-			volume := corev1.Volume{
-				Name: fmt.Sprintf("%s-%d", container.Name, i),
-				VolumeSource: corev1.VolumeSource{
-					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: fmt.Sprintf("%s-%d", standalone.Name, i),
-						ReadOnly:  false,
-					},
-				},
-			}
-			volumes = append(volumes, volume)
-		}
-		return volumes, nil
-	}
-
-	volumeMountBuilder := func(cr interface{}) ([]corev1.VolumeMount, error) {
-		standalone := cr.(*v1alpha1.Standalone)
-		var volumeMounts []corev1.VolumeMount
-
-		// 为每个容器创建对应的卷挂载
-		for i, container := range standalone.Spec.Pod.Containers {
-			volumeMount := corev1.VolumeMount{
-				Name:      fmt.Sprintf("%s-%d", container.Name, i),
-				MountPath: "/data",
-			}
-			volumeMounts = append(volumeMounts, volumeMount)
-		}
-		return volumeMounts, nil
-	}
-
-	sts, err := workload.BuildStatefulSet(cr, configMap.Name, service.Name, 0, volumeBuilder, volumeMountBuilder)
+	sts, err := workload.BuildStatefulSet(*cr.Spec.Pod, cr.Spec.Size, req.Name, req.Namespace, configMap.Name)
+	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
+		corev1.ContainerPort{
+			Name:          "mysqlx",
+			ContainerPort: 33060,
+			Protocol:      corev1.ProtocolTCP,
+		}, corev1.ContainerPort{
+			Name:          "mysql",
+			ContainerPort: 3306,
+			Protocol:      corev1.ProtocolTCP,
+		})
 	if err != nil {
 		r.Log.Error(err, "Failed to build StatefulSet")
 		return err
+	}
+
+	sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, corev1.Volume{
+		Name: secretName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: secretName},
+		},
+	})
+
+	for i := range sts.Spec.Template.Spec.Containers {
+		sts.Spec.Template.Spec.Containers[i].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[i].VolumeMounts,
+			corev1.VolumeMount{
+				Name:      secretName,
+				MountPath: "/etc/secret", // 固定路径
+				ReadOnly:  true,
+			},
+		)
 	}
 
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, sts); err != nil {
@@ -231,6 +271,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 
 	return nil
 }
+
 func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.Standalone) (*v1alpha1.StandaloneStatus, error) {
 	r.Log.Info("Computing status")
 
@@ -242,41 +283,42 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 	result := &v1alpha1.StandaloneStatus{
 		Status: v1alpha1.Status{
 			Phase: v1alpha1.PhaseInitializing, // 默认状态
+			Role:  "standalone",               // 设置默认角色为 standalone
 		},
 	}
 
 	stateMachine := pkg.NewStateMachine(&result.Status)
 
-	deployList := &appsv1.DeploymentList{}
-	err := r.Client.List(ctx, deployList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
+	stsList := &appsv1.StatefulSetList{}
+	err := r.Client.List(ctx, stsList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
 	if err != nil {
 		return nil, err
 	}
 
-	switch len(deployList.Items) {
+	switch len(stsList.Items) {
 	case 0:
-		r.Log.Info("no deployment found")
+		r.Log.Info("no StatefulSet found")
 		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-		stateMachine.SetStatusMessage("Waiting for deployment to be created")
+		stateMachine.SetStatusMessage("Waiting for StatefulSet to be created")
 		stateMachine.SetStatusReason("NotFound")
 		stateMachine.SetReady(0)
 
 	case 1:
-		status := deployList.Items[0].Status
+		status := stsList.Items[0].Status
 		ready := status.ReadyReplicas
 		stateMachine.SetReady(ready)
 
-		r.Log.Info("got deployment status", "status", status)
+		r.Log.Info("got StatefulSet status", "status", status)
 
 		// 通过 Ready 数决定状态
 		switch {
 		case ready == 0:
 			_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-			stateMachine.SetStatusMessage("Pods not ready yet")
+			stateMachine.SetStatusMessage("Waiting for pods to be ready")
 			stateMachine.SetStatusReason("ReadinessZero")
 		case ready > 0:
 			_ = stateMachine.Transition(v1alpha1.PhaseReady)
-			stateMachine.SetStatusMessage("Pods are ready")
+			stateMachine.SetStatusMessage("All pods are ready")
 			stateMachine.SetStatusReason("Healthy")
 		default:
 			_ = stateMachine.Transition(v1alpha1.PhaseError)
@@ -285,28 +327,27 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 		}
 
 	default:
-		r.Log.Info("too many deployments found", "count", len(deployList.Items))
+		r.Log.Info("too many StatefulSet found", "count", len(stsList.Items))
 		_ = stateMachine.Transition(v1alpha1.PhaseError)
-		stateMachine.SetStatusMessage(fmt.Sprintf("Expected 1 deployment, got %d", len(deployList.Items)))
-		stateMachine.SetStatusReason("MultipleDeployments")
-		return &v1alpha1.StandaloneStatus{Status: *stateMachine.GetStatus()}, fmt.Errorf("%d deployments found, expected 1", len(deployList.Items))
+		stateMachine.SetStatusMessage(fmt.Sprintf("Expected 1 StatefulSet, got %d", len(stsList.Items)))
+		stateMachine.SetStatusReason("MultipleStatefulSets")
+		return &v1alpha1.StandaloneStatus{Status: *stateMachine.GetStatus()}, fmt.Errorf("%d StatefulSets found, expected 1", len(stsList.Items))
 	}
 
 	// 更新 Status
 	newStatus := *stateMachine.GetStatus()
-	result.Status = newStatus
+	if !reflect.DeepEqual(cr.Status.Status, newStatus) {
+		cr.Status.Status = newStatus
+		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("Standalone status updated: %s", newStatus.Phase))
 
-	if !reflect.DeepEqual(cr.Status, *result) {
-		cr.Status = *result
-		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("GreatSQL status updated: %s", result.Status.Phase))
-		if err := r.Client.Status().Update(ctx, cr); err != nil {
-			r.Log.Error(err, "Could not update status")
-			return result, err
+		if err := kube.UpdateStatusWithRetry(ctx, r.Client, cr, cr.Status); err != nil {
+			r.Log.Error(err, "Could not update status with retry")
+			return &cr.Status, err
 		}
 	}
 
-	r.Log.Info("Status updated", "status", result)
-	return result, nil
+	r.Log.V(1).Info("Before update status", "status", cr.Status)
+	return &cr.Status, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -314,6 +355,6 @@ func (r *StandaloneReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ResourceHelper = kube.NewResourceHelper(mgr, r.Log)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.Standalone{}).
-		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }

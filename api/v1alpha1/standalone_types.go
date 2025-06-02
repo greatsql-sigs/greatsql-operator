@@ -43,6 +43,13 @@ type StandaloneStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=sd
+//+kubebuilder:printcolumn:name="Role",type="string",JSONPath=".status.role",description="The role of the standalone instance"
+//+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The current phase of the standalone instance"
+//+kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message",description="The status message"
+//+kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.reason",description="The status reason"
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The number of ready replicas"
 
 // Standalone is the Schema for the singles API
 type Standalone struct {
@@ -60,10 +67,6 @@ type StandaloneList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Standalone `json:"items"`
-}
-
-func (s *StandaloneList) Finalizer() []string {
-	return []string{"finalizer.standalone.database.greatsql.cn"}
 }
 
 func init() {

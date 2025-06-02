@@ -11,45 +11,46 @@ metadata:
 spec:
   size: 1
   version: "8.0.32-26"
-  serviceAccountName: greatsql
+  serviceAccountName: default
   serviceName: greatsql
-  containers:
-    - name: greatsql
-      image: greatsql/greatsql:8.0.32-26
-      imagePullPolicy: IfNotPresent
-      imagePullSecrets:
-      resources:
-        requests:
-          memory: "2Gi"
-          cpu: "2"
-        limits:
-          memory: "8Gi"
-          cpu: "4"
-      startupProbe:
-        tcpSocket:
-          port: 3306
-        initialDelaySeconds: 5
-        periodSeconds: 10
-      readinessProbe:
-        tcpSocket:
-          port: 3306
-        initialDelaySeconds: 5
-        periodSeconds: 10
-      livenessProbe:
-        tcpSocket:
-          port: 3306
-        initialDelaySeconds: 30
-        periodSeconds: 10
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-      env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: greatsql-secret
-              key: MYSQL_ROOT_PASSWORD
+  container:
+    name: greatsql
+    image: greatsql/greatsql:8.0.32-26
+    imagePullPolicy: IfNotPresent
+    imagePullSecrets:
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+    startupProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    readinessProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    livenessProbe:
+      tcpSocket:
+        port: 3306
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+    env:
+      - name: LOWER_CASE_TABLE_NAMES
+        value: "0"
+      - name: MYSQL_ROOT_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: greatsql-standalone-secret
+            key: MYSQL_ROOT_PASSWORD
 
   affinity:
     antiAffinityTopologyKey: "kubernetes.io/hostname"
@@ -69,7 +70,7 @@ spec:
   priorityClassName: greatsql-priority
 
   storages:
-    storageClassName: ebs-gp3-sc
+    storageClassName: standard
     accessModes: ["ReadWriteOnce"]
     volumeMode: Filesystem
     size: "10Gi"
@@ -87,6 +88,6 @@ spec:
     type: LoadBalancer
     selector:
       app: greatsql
-    loadBalancerClass: "service.k8s.aws/nlb"
-    annotations:
-      service.kubernetes.io/aws-load-balancer-type: nlb
+    #loadBalancerClass: "service.k8s.aws/nlb"
+    #annotations:
+    #  service.kubernetes.io/aws-load-balancer-type: nlb

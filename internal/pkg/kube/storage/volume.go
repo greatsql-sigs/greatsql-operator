@@ -16,7 +16,7 @@ import (
  */
 
 // DefaultPersistentVolumeClaimSize 默认PersistentVolumeClaim大小
-const DefaultPersistentVolumeClaimSize = "5Gi"
+const DefaultPersistentVolumeClaimSize = "10Gi"
 
 // BuildPersistentVolumeClaim 单个 PVC 通用规范
 func BuildPersistentVolumeClaim(cr any, mode corev1.PersistentVolumeAccessMode, size string, storageClassName *string) (corev1.PersistentVolumeClaim, error) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -36,7 +38,7 @@ func NewResourceHelper(mgr manager.Manager, log logr.Logger) *ResourceHelper {
 	}
 }
 
-// CreateOrUpdateWithOwner 创建或更新资源，设置 ownerReference，自动识别 GVK
+// CreateOrUpdateWithOwner 创建或更新资源，并设置 ownerReference
 func (r *ResourceHelper) CreateOrUpdateWithOwner(ctx context.Context, owner client.Object, obj client.Object) error {
 	log := r.Log.WithValues("namespace", obj.GetNamespace(), "name", obj.GetName())
 
@@ -54,27 +56,51 @@ func (r *ResourceHelper) CreateOrUpdateWithOwner(ctx context.Context, owner clie
 
 	key := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 	existing := obj.DeepCopyObject().(client.Object)
+
 	err = r.Client.Get(ctx, key, existing)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Creating new resource")
-			err = r.Client.Create(ctx, obj)
-			if err != nil {
+			if err := r.Client.Create(ctx, obj); err != nil {
 				log.Error(err, "failed to create resource")
+				return err
 			}
-			return err
+			return nil
 		}
 		log.Error(err, "failed to get resource")
 		return err
 	}
 
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	log.Info("Updating existing resource")
-	err = r.Client.Update(ctx, obj)
-	if err != nil {
-		log.Error(err, "failed to update resource")
+	// 特殊处理 PVC
+	if gvk.Kind == "PersistentVolumeClaim" {
+		newPVC := obj.(*corev1.PersistentVolumeClaim)
+		existingPVC := existing.(*corev1.PersistentVolumeClaim)
+
+		if newPVC.Spec.Resources.Requests != nil {
+			existingPVC.Spec.Resources.Requests = newPVC.Spec.Resources.Requests
+		}
+		existingPVC.SetLabels(newPVC.GetLabels())
+		existingPVC.SetAnnotations(newPVC.GetAnnotations())
+		existingPVC.SetOwnerReferences(newPVC.GetOwnerReferences())
+
+		log.Info("Updating existing PVC")
+		return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			return r.Client.Update(ctx, existingPVC)
+		})
 	}
-	return err
+
+	// 默认资源更新，冲突重试
+	log.Info("Updating existing resource")
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := obj.DeepCopyObject().(client.Object)
+		if err := r.Client.Get(ctx, key, latest); err != nil {
+			return err
+		}
+		latest.SetLabels(obj.GetLabels())
+		latest.SetAnnotations(obj.GetAnnotations())
+		latest.SetOwnerReferences(obj.GetOwnerReferences())
+		return r.Client.Update(ctx, latest)
+	})
 }
 
 // DeleteResource 删除资源

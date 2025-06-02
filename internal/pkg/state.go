@@ -4,25 +4,27 @@ import (
 	"fmt"
 	"time"
 
+	"slices"
+
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 )
 
 // StateMachine 状态机结构
 type StateMachine struct {
-	currentPhase v1alpha1.Phase
-	status       *v1alpha1.Status
+	// currentPhase v1alpha1.Phase
+	status *v1alpha1.Status
 }
 
 func NewStateMachine(status *v1alpha1.Status) *StateMachine {
 	return &StateMachine{
-		currentPhase: status.Phase,
-		status:       status,
+		// currentPhase: status.Phase,
+		status: status,
 	}
 }
 
 // validTransitions 状态转换规则
 var validTransitions = map[v1alpha1.Phase][]v1alpha1.Phase{
-	v1alpha1.PhaseInitializing: {v1alpha1.PhaseRunning, v1alpha1.PhaseError},
+	v1alpha1.PhaseInitializing: {v1alpha1.PhaseRunning, v1alpha1.PhaseError, v1alpha1.PhaseReady},
 	v1alpha1.PhaseRunning:      {v1alpha1.PhaseReady, v1alpha1.PhaseError, v1alpha1.PhaseStoping},
 	v1alpha1.PhaseStoping:      {v1alpha1.PhaseError},
 	v1alpha1.PhaseReady:        {v1alpha1.PhaseRunning, v1alpha1.PhaseError, v1alpha1.PhasePaused},
@@ -30,52 +32,46 @@ var validTransitions = map[v1alpha1.Phase][]v1alpha1.Phase{
 	v1alpha1.PhasePaused:       {v1alpha1.PhaseRunning, v1alpha1.PhaseError},
 }
 
-// Transition 执行状态转换
+// Transition 状态转换
 func (sm *StateMachine) Transition(newPhase v1alpha1.Phase) error {
-	// 幂等处理，防止重复设置相同状态
-	if sm.currentPhase == newPhase {
+	current := sm.status.Phase
+
+	if current == newPhase {
 		return nil
 	}
 
-	allowedPhases, exists := validTransitions[sm.currentPhase]
+	allowedPhases, exists := validTransitions[current]
 	if !exists {
-		return fmt.Errorf("no valid transitions defined for phase: %s", sm.currentPhase)
+		return fmt.Errorf("no valid transitions defined for phase: %s", current)
 	}
 
-	for _, allowed := range allowedPhases {
-		if allowed == newPhase {
-			sm.currentPhase = newPhase
-			sm.status.Phase = newPhase
-			sm.status.Age = time.Now().Format(time.RFC3339)
+	if !slices.Contains(allowedPhases, newPhase) {
+		return fmt.Errorf("invalid state transition from %s to %s", current, newPhase)
+	}
 
-			// 特殊状态默认消息和原因
-			switch newPhase {
-			case v1alpha1.PhaseError:
-				if sm.status.Message == "" {
-					sm.status.Message = "system error"
-				}
-				if sm.status.Reason == "" {
-					sm.status.Reason = "unknown error"
-				}
-			case v1alpha1.PhasePaused:
-				if sm.status.Message == "" {
-					sm.status.Message = "system paused"
-				}
-				if sm.status.Reason == "" {
-					sm.status.Reason = "manual paused"
-				}
-			}
+	// 执行状态切换
+	sm.status.Phase = newPhase
+	sm.status.Age = time.Now().Format(time.RFC3339)
 
-			return nil
+	// 设置默认 Message/Reason
+	switch newPhase {
+	case v1alpha1.PhaseError:
+		if sm.status.Message == "" {
+			sm.status.Message = "system error"
+		}
+		if sm.status.Reason == "" {
+			sm.status.Reason = "unknown error"
+		}
+	case v1alpha1.PhasePaused:
+		if sm.status.Message == "" {
+			sm.status.Message = "system paused"
+		}
+		if sm.status.Reason == "" {
+			sm.status.Reason = "manual paused"
 		}
 	}
 
-	return fmt.Errorf("invalid state transition from %s to %s", sm.currentPhase, newPhase)
-}
-
-// GetCurrentPhase 获取当前状态
-func (sm *StateMachine) GetCurrentPhase() v1alpha1.Phase {
-	return sm.currentPhase
+	return nil
 }
 
 // SetStatusMessage 设置状态信息

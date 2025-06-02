@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/storage"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/schedule"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,8 +43,6 @@ import (
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
 	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
-	schedulingv1 "k8s.io/api/scheduling/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GroupReplicationClusterReconciler reconciles a GroupReplicationCluster object
@@ -180,7 +178,6 @@ func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx
 		fn   func() error
 	}{
 		{"create ConfigMap", func() error { return r.createConfigMap(ctx, req, mgr, 0) }},
-		{"create PVC", func() error { return r.createPersistentVolumeClaim(ctx, mgr, 0) }},
 		{"create StatefulSet", func() error { return r.createStatefulSet(ctx, req, mgr, 0) }},
 		{"wait Pod ready", func() error { return r.waitForPodsReady(ctx, req) }},
 		{"init cluster", func() error { return r.initializeSingleMasterCluster(mgr) }},
@@ -204,9 +201,7 @@ func (r *GroupReplicationClusterReconciler) createMultiplePrimaryModeResources(c
 		if err := r.createConfigMap(ctx, req, mgr, i); err != nil {
 			return err
 		}
-		if err := r.createPersistentVolumeClaim(ctx, mgr, i); err != nil {
-			return err
-		}
+
 		if err := r.createStatefulSet(ctx, req, mgr, i); err != nil {
 			return err
 		}
@@ -240,7 +235,10 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 
 // createSecret creates a Secret for the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	secret := kube.NewSecretEnv(req.Name+"-secret", req.Namespace, mgr.Spec.Containers[0].Envs)
+	secret, err := kube.NewSecretEnv(mgr, r.Scheme, req.Name+"-secret", req.Namespace, mgr.Spec.Container.Envs)
+	if err != nil {
+		r.Log.Error(err, "Could not create secret from envs")
+	}
 	if err := r.Client.Create(ctx, secret); err != nil {
 		r.Log.Error(err, "Could not create secret")
 		return err
@@ -265,7 +263,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 
 	groupSeeds := []string{fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local:%d", req.Name, ordinal, req.Name, req.Namespace, consts.MgrCommunicatePort)}
 
-	memoryReq := mgr.Spec.Containers[0].Resources.Requests.Memory().Value()
+	memoryReq := mgr.Spec.Container.Resources.Requests.Memory().Value()
 	cnf := mysql.NewConfig(
 		mysql.WithServerID(fmt.Sprintf("%d", ordinal)),
 		mysql.WithEnableCluster(true),
@@ -296,83 +294,28 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, configMap)
 }
 
-// createPersistentVolumeClaim creates a PersistentVolumeClaim for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createPersistentVolumeClaim(ctx context.Context, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
-	pvcs, err := storage.BuildPersistentVolumeClaims(mgr, mgr.Spec.Pod.Storages.AccessModes, *mgr.Spec.Pod.Storages.Size, mgr.Spec.Pod.Storages.StorageClassName, ordinal)
-
-	if err != nil {
-		r.Log.Error(err, "Could not create persistentVolumeClaim")
-		return err
-	}
-	for _, pvc := range pvcs {
-		if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, &pvc); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// createPriorityClass 创建 PriorityClass
-func (r *GroupReplicationClusterReconciler) createPriorityClass(ctx context.Context, mgr *v1alpha1.GroupReplicationCluster) error {
-	if mgr.Spec.Pod.PriorityClassName == nil {
-		r.Log.Info("PriorityClassName is nil, skip create PriorityClass")
-		return nil
-	}
-
-	priorityClass := &schedulingv1.PriorityClass{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: *mgr.Spec.Pod.PriorityClassName,
-		},
-		Value: 1000000, // 设置一个较高的优先级值
-	}
-
-	// 检查 PriorityClass 是否已存在
-	existing := &schedulingv1.PriorityClass{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: priorityClass.Name}, existing)
-	if err == nil {
-		// PriorityClass 已存在，无需创建
-		return nil
-	}
-
-	if !errors.IsNotFound(err) {
-		return err
-	}
-
-	// 创建 PriorityClass
-	if err := r.Client.Create(ctx, priorityClass); err != nil {
-		r.Log.Error(err, "Could not create PriorityClass")
-		return err
-	}
-
-	r.Log.Info("Created PriorityClass", "Name", priorityClass.Name)
-	return nil
-}
-
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster, ordinal int) error {
 	// 如果定义了 PriorityClassName，先创建 PriorityClass
-	if err := r.createPriorityClass(ctx, mgr); err != nil {
+	if err := schedule.CreatePriorityClass(ctx, cr.Spec.Pod, r.Client); err != nil {
 		return err
 	}
 
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
-	sts, err := workload.BuildStatefulSet(mgr, configMapName, fmt.Sprintf("%s-headless", req.Name), ordinal, nil, nil)
+	totalMembers := cr.Spec.GetTotalMembers()
+	sts, err := workload.BuildStatefulSet(*cr.Spec.Pod, &totalMembers, req.Name, req.Namespace, configMapName)
 	if err != nil {
 		r.Log.Error(err, "Could not create statefulSet")
 		return err
 	}
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
 		corev1.ContainerPort{
-			Name:          consts.MgrCommunicaName,
-			ContainerPort: consts.MgrCommunicatePort,
+			Name:          "mysqlx",
+			ContainerPort: 33060,
 			Protocol:      corev1.ProtocolTCP,
 		}, corev1.ContainerPort{
-			Name:          consts.MgrAdminName,
-			ContainerPort: consts.MgrAdminPort,
-			Protocol:      corev1.ProtocolTCP,
-		}, corev1.ContainerPort{
-			Name:          consts.MySQLPortName,
-			ContainerPort: consts.MySQLPort,
+			Name:          "mysql",
+			ContainerPort: 3306,
 			Protocol:      corev1.ProtocolTCP,
 		})
 	if err := r.Client.Create(ctx, sts); err != nil {
@@ -385,7 +328,11 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 
 // createService creates a Service for the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	service := network.BuildServices(req.Name, *mgr.Spec.Service)
+	service, err := network.BuildServices(mgr, *mgr.Spec.Service)
+	if err != nil {
+		r.Log.Error(err, "Could not build service")
+		return err
+	}
 	service.Name = fmt.Sprintf("%s-headless", req.Name)
 	service.Spec.ClusterIP = corev1.ClusterIPNone
 	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
@@ -397,7 +344,7 @@ func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v
 		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace),
 		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
-		Password: consts.MySQLRootPassWord,
+		Password: consts.MYSQL_ROOT_PASSWORD_KEY,
 		DB:       consts.MySQLDB,
 	}
 
@@ -544,7 +491,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", cr.Name, cr.Name, cr.Namespace),
 		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
-		Password: consts.MySQLRootPassWord,
+		Password: consts.MYSQL_ROOT_PASSWORD_KEY,
 		DB:       consts.MySQLDB,
 	}
 
