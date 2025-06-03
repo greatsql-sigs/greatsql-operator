@@ -353,9 +353,9 @@ func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
 		}},
-		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
 		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
 		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},
 	}
@@ -409,9 +409,9 @@ func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.G
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
 		}},
-		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
 		{"set bootstrap node", mysql.SetBootstrapNode},
 		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
 		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 300) }},
@@ -437,9 +437,9 @@ func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.Grou
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mysql.CreateUser(consts.ReplicationChannelUser, consts.ReplicationChannelPassword)
+			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
 		}},
-		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.ReplicationChannelUser) }},
+		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
 		{"wait for primary", func() error { return mysql.WaitForPrimaryAvailable(primaryHost, 300) }},
 		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
 		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},
