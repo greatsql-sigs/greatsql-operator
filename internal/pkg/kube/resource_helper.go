@@ -34,7 +34,7 @@ func NewResourceHelper(mgr manager.Manager, log logr.Logger) *ResourceHelper {
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Log:    log.WithName("ResourceHelper"),
-		Mapper: mgr.GetRESTMapper(),
+		Mapper: mgr.GetRESTMapper(), 
 	}
 }
 
@@ -147,8 +147,7 @@ func (r *ResourceHelper) DeleteResourceWithFinalizerAndOwner(ctx context.Context
 	return r.Client.Update(ctx, obj)
 }
 
-// ListResource 列出资源
-// 采用informer 方式列出资源，防止因频繁查询资源导致性能问题
+// ListResource 列出资源, 使用 informer 机制，防止因频繁查询资源导致性能问题
 func (r *ResourceHelper) ListResource(ctx context.Context, namespace string, obj client.Object) ([]client.Object, error) {
 	gvk, err := r.getGVK(obj)
 	if err != nil {
@@ -166,7 +165,7 @@ func (r *ResourceHelper) ListResource(ctx context.Context, namespace string, obj
 	}
 
 	indexer := informer.GetIndexer()
-	var objs []interface{}
+	var objs []any
 
 	if namespace == "" {
 		objs = indexer.List()

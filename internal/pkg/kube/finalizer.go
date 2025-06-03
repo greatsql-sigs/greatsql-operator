@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-const finalizer = "greatsql-operator.greatsql-sigs.io/finalizer"
+const finalizer = "database.greatsql.cn/finalizer"
 
 // HandleFinalizerWithCleanup handles the finalizer for a Kubernetes object.
 func HandleFinalizerWithCleanup[T client.Object](
