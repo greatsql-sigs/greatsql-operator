@@ -1,4 +1,4 @@
-package utils
+package util
 
 import (
 	"context"
@@ -99,4 +99,44 @@ func GetPodHealth(pod *corev1.Pod) string {
 	}
 
 	return "NotHealthy"
+}
+
+// FormatDuration 格式化时间间隔
+func FormatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return d.Round(time.Second).String()
+}
+
+// FormatTime 格式化时间
+func FormatTime(t time.Time) string {
+	return t.Format("2006-01-02 15:04:05")
+}
+
+// FormatBytes 格式化字节大小
+func FormatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// FormatPercentage 格式化百分比
+func FormatPercentage(value float64) string {
+	return fmt.Sprintf("%.2f%%", value*100)
+}
+
+// FormatNumber 格式化数字
+func FormatNumber(num int64) string {
+	if num < 1000 {
+		return fmt.Sprintf("%d", num)
+	}
+	return fmt.Sprintf("%.1fK", float64(num)/1000)
 }

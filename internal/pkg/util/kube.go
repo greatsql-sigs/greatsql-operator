@@ -1,4 +1,4 @@
-package utils
+package util
 
 import (
 	"fmt"
@@ -9,13 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 )
-
-/**
- * @author: HuaiAn xu
- * @date: 2024-07-21 15:41:31
- * @file: kube.go
- * @description: kubernetes util
- */
 
 // SetPodAffinity sets the pod affinity for the given labels
 func SetPodAffinity(labels map[string]string) *corev1.Affinity {

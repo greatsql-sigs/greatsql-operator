@@ -39,10 +39,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/mysql"
-	"github.com/greatsql-sigs/greatsql-operator/internal/utils"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/util"
 )
 
 // GroupReplicationClusterReconciler reconciles a GroupReplicationCluster object
@@ -80,7 +79,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	// 初始化状态机
-	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
+	stateMachine := util.NewStateMachine(&mgr.Status.Status)
 
 	if err := mgr.Spec.ValidateClusterSpec(); err != nil {
 		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "InvalidSpec", err.Error(), err)
@@ -111,7 +110,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 }
 
 // transitionWithError 状态转换错误处理
-func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *pkg.StateMachine, phase v1alpha1.Phase, reason, message string, err error) error {
+func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *util.StateMachine, phase v1alpha1.Phase, reason, message string, err error) error {
 	stateMachine.SetStatusMessage(message)
 	stateMachine.SetStatusReason(reason)
 	_ = stateMachine.Transition(phase)
@@ -119,7 +118,7 @@ func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *pk
 }
 
 func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
+	stateMachine := util.NewStateMachine(&mgr.Status.Status)
 	_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
 
 	if err := r.createSecret(ctx, req, mgr); err != nil {
@@ -183,7 +182,7 @@ func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx
 		{"init cluster", func() error { return r.initializeSingleMasterCluster(mgr) }},
 	}
 
-	stateMachine := pkg.NewStateMachine(&mgr.Status.Status)
+	stateMachine := util.NewStateMachine(&mgr.Status.Status)
 	for _, step := range steps {
 		if err := step.fn(); err != nil {
 			return r.transitionWithError(stateMachine, v1alpha1.PhaseError, step.name+"Error", err.Error(), err)
@@ -267,7 +266,7 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 	cnf := mysql.NewConfig(
 		mysql.WithServerID(fmt.Sprintf("%d", ordinal)),
 		mysql.WithEnableCluster(true),
-		mysql.WithGroupReplicationGroupName(utils.GetUUID()),
+		mysql.WithGroupReplicationGroupName(util.GetUUID()),
 		mysql.WithGroupReplicationGroupSeeds(strings.Join(groupSeeds, ",")),
 		mysql.WithReportHost(fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace)),
 		mysql.WithReportPort(3306),
@@ -477,7 +476,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 		},
 	}
 
-	stateMachine := pkg.NewStateMachine(&result.Status)
+	stateMachine := util.NewStateMachine(&result.Status)
 
 	// 获取所有Pod
 	podList := &corev1.PodList{}

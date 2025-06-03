@@ -1,17 +1,10 @@
-package utils
+package util
 
 import (
 	"strings"
 
 	"github.com/google/uuid"
 )
-
-/**
- * @author: HuaiAn xu
- * @date: 2024-05-02 00:34:31
- * @file: id.go
- * @description: id util
- */
 
 // GetUUID generates a new UUID
 func GetUUID() string {

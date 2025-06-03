@@ -22,10 +22,10 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/schedule"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/util"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -287,7 +287,7 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 		},
 	}
 
-	stateMachine := pkg.NewStateMachine(&result.Status)
+	stateMachine := util.NewStateMachine(&result.Status)
 
 	stsList := &appsv1.StatefulSetList{}
 	err := r.Client.List(ctx, stsList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})

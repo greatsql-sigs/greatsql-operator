@@ -1,15 +1,9 @@
-package utils
+package util
 
 import (
 	"encoding/base64"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-03-21 15:29:03
- * @file: encrypt.go
- * @description: encrypt util
- */
 
 // Base64Encode base64 encode
 func Base64Encode(data []byte) string {
