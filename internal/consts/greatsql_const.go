@@ -56,7 +56,8 @@ const (
 	MYSQL_ROOT_PASSWORD_KEY string = "MYSQL_ROOT_PASSWORD"
 	// password
 	// original text: GreatSQL@2024
-	MYSQL_ROOT_PASSWORD_VALUE string = "R3JlYXRTUUxAMjAyNA=="
+	// MYSQL_ROOT_PASSWORD_VALUE string = "R3JlYXRTUUxAMjAyNA=="
+	MYSQL_ROOT_PASSWORD_VALUE string = "GreatSQL@2025"
 	// default replication channel user
 	ReplicationChannelUser string = "repl"
 	// default replication channel password
