@@ -34,7 +34,7 @@ func NewResourceHelper(mgr manager.Manager, log logr.Logger) *ResourceHelper {
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Log:    log.WithName("ResourceHelper"),
-		Mapper: mgr.GetRESTMapper(), 
+		Mapper: mgr.GetRESTMapper(),
 	}
 }
 

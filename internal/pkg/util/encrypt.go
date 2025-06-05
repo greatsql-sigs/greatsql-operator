@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 )
 
-
 // Base64Encode base64 encode
 func Base64Encode(data []byte) string {
 	encode := base64.StdEncoding.EncodeToString(data)
