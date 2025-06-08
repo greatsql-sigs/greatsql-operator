@@ -67,12 +67,12 @@ type GroupReplicationClusterReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 
 func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("Reconciling GroupReplicationCluster", "name", req.NamespacedName)
+	r.Log.Info("Reconciling GroupReplicationCluster", req.NamespacedName)
 
 	mgr := &v1alpha1.GroupReplicationCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, mgr); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Resource deleted, skip", "name", req.NamespacedName)
+			r.Log.Info("Resource deleted, skip", req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -95,7 +95,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 
 	sts := &appsv1.StatefulSet{}
 	if err := r.Client.Get(ctx, req.NamespacedName, sts); err != nil {
-		if err := r.createResources(ctx, req, mgr); err != nil {
+		if err := r.createBaseResources(ctx, req, mgr); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -117,26 +117,67 @@ func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *ut
 	return err
 }
 
-func (r *GroupReplicationClusterReconciler) createResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	stateMachine := util.NewStateMachine(&mgr.Status.Status)
+// createBaseResources 创建基础资源
+func (r *GroupReplicationClusterReconciler) createBaseResources(
+	ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster,
+) error {
+	stateMachine := util.NewStateMachine(&cr.Status.Status)
 	_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
 
-	if err := r.createSecret(ctx, req, mgr); err != nil {
+	// 创建 Secret
+	secret, err := kube.NewSecretEnv(
+		cr, r.Scheme, req.Name+"-secret", req.Namespace, cr.Spec.Container.Envs,
+	)
+	if err != nil {
+		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
+	}
+	if err = r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, secret); err != nil {
 		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
 	}
 
-	// 创建Service
-	if err := r.createService(ctx, req, mgr); err != nil {
+	// 创建 Service
+	r.createService(ctx, req, cr, stateMachine)
+
+	// 创建集群资源
+	if cr.Spec.IsSingleMode() {
+		return r.createSinglePrimaryModeResources(ctx, req, cr)
+	}
+	if cr.Spec.IsMultipleMode() {
+		return r.createMultiplePrimaryModeResources(ctx, req, cr)
+	}
+	return r.transitionWithError(
+		stateMachine, v1alpha1.PhaseError, "UnsupportedMode",
+		"unsupported cluster mode", fmt.Errorf("unsupported cluster mode: %s", cr.Spec.Mode),
+	)
+}
+
+// createService 创建service
+func (r *GroupReplicationClusterReconciler) createService(
+	ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster, stateMachine *util.StateMachine,
+) error {
+	svcSpec := cr.Spec.Service
+	baseService, err := network.BuildServices(cr, *svcSpec)
+	if err != nil {
 		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
 	}
 
-	if mgr.Spec.IsSingleMode() {
-		return r.createSinglePrimaryModeResources(ctx, req, mgr)
-	} else if mgr.Spec.IsMultipleMode() {
-		return r.createMultiplePrimaryModeResources(ctx, req, mgr)
+	// 创建 headless service
+	headlessService := baseService.DeepCopy()
+	headlessService.Name = fmt.Sprintf("%s-headless", req.Name)
+	headlessService.Spec.ClusterIP = corev1.ClusterIPNone
+	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, headlessService); err != nil {
+		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
 	}
 
-	return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "UnsupportedMode", "unsupported cluster mode", fmt.Errorf("unsupported cluster mode: %s", mgr.Spec.Mode))
+	// 创建普通的 service
+	service := baseService.DeepCopy()
+	service.Name = req.Name
+	service.Spec.Type = cr.Spec.Service.Type
+	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, service); err != nil {
+		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
+	}
+
+	return nil
 }
 
 // handleFinalizer handles the finalizer of the GroupReplicationCluster
@@ -144,10 +185,24 @@ func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context,
 	log := r.Log.WithValues("groupreplicationcluster", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
 
 	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
+		// 删除 Secret
+		secret := &corev1.Secret{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, secret); err != nil {
+			log.Error(err, "Failed to delete Secret")
+			return err
+		}
+
 		// 删除 Service
 		svc := &corev1.Service{}
 		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
 			log.Error(err, "Failed to delete Service")
+			return err
+		}
+
+		// 删除sts
+		sts := &appsv1.StatefulSet{}
+		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
+			log.Error(err, "Failed to delete StatefulSet")
 			return err
 		}
 
@@ -158,19 +213,13 @@ func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context,
 			return err
 		}
 
-		// 删除 Secret
-		secret := &corev1.Secret{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, secret); err != nil {
-			log.Error(err, "Failed to delete Secret")
-			return err
-		}
-
 		// TODO: 删除 PVC?
 
 		return nil
 	})
 }
 
+// createSinglePrimaryModeResources 创建单主模式的资源
 func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
 	steps := []struct {
 		name string
@@ -229,19 +278,6 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 		}
 	}
 
-	return nil
-}
-
-// createSecret creates a Secret for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createSecret(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	secret, err := kube.NewSecretEnv(mgr, r.Scheme, req.Name+"-secret", req.Namespace, mgr.Spec.Container.Envs)
-	if err != nil {
-		r.Log.Error(err, "Could not create secret from envs")
-	}
-	if err := r.Client.Create(ctx, secret); err != nil {
-		r.Log.Error(err, "Could not create secret")
-		return err
-	}
 	return nil
 }
 
@@ -323,18 +359,6 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 	}
 	r.Log.Info("Create statefulSet is successful", "Name", sts.Name, "Namespace", sts.Namespace)
 	return nil
-}
-
-// createService creates a Service for the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createService(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
-	service, err := network.BuildServices(mgr, *mgr.Spec.Service)
-	if err != nil {
-		r.Log.Error(err, "Could not build service")
-		return err
-	}
-	service.Name = fmt.Sprintf("%s-headless", req.Name)
-	service.Spec.ClusterIP = corev1.ClusterIPNone
-	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, service)
 }
 
 // initializeSingleMasterCluster 初始化单节点集群

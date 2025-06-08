@@ -75,10 +75,10 @@ spec:
   restartPolicy: Always
 
   storages:
-    storageClassName: ebs-gp3-sc
+    storageClassName: standard
     accessModes: ["ReadWriteOnce"]
     volumeMode: Filesystem
-    size: "5Gi"
+    size: "10Gi"
 
   upgrade:
     versionServiceEndpoint: ""
@@ -92,7 +92,7 @@ spec:
   service:
     type: LoadBalancer
     selector:
-      app: greatsql
-    loadBalancerClass: "service.k8s.aws/nlb"
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      app: greatsql-mgr
+    # loadBalancerClass: "service.k8s.aws/nlb"
+    # annotations:
+    #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
