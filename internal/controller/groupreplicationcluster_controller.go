@@ -81,9 +81,9 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	// 初始化状态机
 	stateMachine := util.NewStateMachine(&mgr.Status.Status)
 
-	if err := mgr.Spec.ValidateClusterSpec(); err != nil {
-		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "InvalidSpec", err.Error(), err)
-	}
+	// if err := mgr.Spec.ValidateClusterSpec(); err != nil {
+	// 	return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "InvalidSpec", err.Error(), err)
+	// }
 
 	if err := r.handleFinalizer(ctx, mgr); err != nil {
 		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "FinalizerError", err.Error(), err)
@@ -459,6 +459,7 @@ func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.Grou
 func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.GroupReplicationCluster{}).
+		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }
 

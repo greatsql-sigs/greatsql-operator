@@ -61,6 +61,7 @@ type GroupReplicationClusterStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:resource:shortName=mgr
 //+kubebuilder:printcolumn:name="Role",type="string",JSONPath=".status.role",description="The member role of the group replication cluster"
 //+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The current phase of the group replication cluster"
@@ -155,12 +156,13 @@ func (s *GroupReplicationClusterSpec) GetArbitratorMembers() []Member {
 }
 
 // ValidateClusterSpec 验证集群配置是否有效
+// TODO: 使用webhook来实现
 func (s *GroupReplicationClusterSpec) ValidateClusterSpec() error {
 	switch {
 	case s.IsSingleMode():
-		if s.GetTotalMembers() != 1 {
-			return fmt.Errorf("single mode cluster must have exactly one member")
-		}
+		// if s.GetTotalMembers() != 7 {
+		// 	return fmt.Errorf("single mode cluster must have exactly 9 member")
+		// }
 		if len(s.GetPrimaryMembers()) != 1 {
 			return fmt.Errorf("single mode cluster must have exactly one primary member")
 		}

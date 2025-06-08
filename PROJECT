@@ -12,6 +12,7 @@ resources:
 - api:
     crdVersion: v1alpha1
     namespaced: true
+    storage: true
   controller: true
   domain: greatsql.cn
   group: database
@@ -21,6 +22,7 @@ resources:
 - api:
     crdVersion: v1alpha1
     namespaced: true
+    storage: true
   controller: true
   domain: greatsql.cn
   group: database

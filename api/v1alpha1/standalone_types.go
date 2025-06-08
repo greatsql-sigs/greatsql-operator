@@ -43,6 +43,7 @@ type StandaloneStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:storageversion
 // +kubebuilder:resource:shortName=sd
 //+kubebuilder:printcolumn:name="Role",type="string",JSONPath=".status.role",description="The role of the standalone instance"
 //+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The current phase of the standalone instance"
