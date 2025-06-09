@@ -78,11 +78,11 @@ jobs:
 
       - name: Install Helm chart for project
         run: |
-          helm install my-release ./dist/chart --create-namespace --namespace greatsql-system
+          helm install release ./dist/chart --create-namespace --namespace greatsql-system
 
       - name: Check Helm release status
         run: |
-          helm status my-release --namespace greatsql-system
+          helm status release --namespace greatsql-system
 
 # TODO: Uncomment if prometheus.enabled is set to true to confirm that the ServiceMonitor gets created
 #      - name: Check Presence of ServiceMonitor
