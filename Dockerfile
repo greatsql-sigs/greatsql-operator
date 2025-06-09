@@ -35,7 +35,7 @@ FROM gcr.io/distroless/static:nonroot
 # FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
 # FROM registry.cn-beijing.aliyuncs.com/greatsql/static:nonroot
 WORKDIR /
-COPY --from=builder /app/operator-controller .
+COPY --from=builder /app/bin/operator-controller .
 USER 65532:65532
 
 ENTRYPOINT ["/operator-controller"]
