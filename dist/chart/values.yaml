@@ -13,7 +13,7 @@ controllerManager:
       - "--health-probe-bind-address=:8081"
     env:
       # 控制operator的协调（reconciliation）循环的时间间隔，10s
-      - name: RECONCILIATION_INTERVAL
+      - name: "RECONCILIATION_INTERVAL"
         value: "10s"
     resources:
       limits:
