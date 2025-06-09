@@ -35,8 +35,7 @@ FROM gcr.io/distroless/static:nonroot
 # FROM registry.cn-chengdu.aliyuncs.com/gcr-distroless/static:nonroot
 # FROM registry.cn-beijing.aliyuncs.com/greatsql/static:nonroot
 WORKDIR /
-COPY --from=builder /app/greatsql-controller-manager .
-COPY --from=builder /app/gcm-cli /usr/local/bin/gcm-cli
+COPY --from=builder /app/operator-controller .
 USER 65532:65532
 
-ENTRYPOINT ["/greatsql-controller-manager"]
+ENTRYPOINT ["/operator-controller"]
