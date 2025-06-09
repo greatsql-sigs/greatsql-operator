@@ -6,13 +6,14 @@ domain: greatsql.cn
 layout:
 - go.kubebuilder.io/v4
 multigroup: true
-projectName: greatsql
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
+projectName: greatsql-operator
 repo: github.com/greatsql-sigs/greatsql-operator
 resources:
 - api:
     crdVersion: v1alpha1
     namespaced: true
-    storage: true
   controller: true
   domain: greatsql.cn
   group: database
@@ -22,7 +23,6 @@ resources:
 - api:
     crdVersion: v1alpha1
     namespaced: true
-    storage: true
   controller: true
   domain: greatsql.cn
   group: database

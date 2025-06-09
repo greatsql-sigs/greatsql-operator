@@ -79,7 +79,7 @@ spec:
         # seccompProfile:
         #   type: RuntimeDefault
       containers:
-      - name: manager
+      - name: operator-controller
         image: registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
         args:
           - --leader-elect=true
