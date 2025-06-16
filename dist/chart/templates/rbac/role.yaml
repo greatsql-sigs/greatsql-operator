@@ -1,0 +1,66 @@
+{{- if .Values.rbac.enable }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: greatsql-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secret
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulset
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - database.greatsql.cn
+  resources:
+  - groupreplicationclusters
+  - standalones
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - database.greatsql.cn
+  resources:
+  - groupreplicationclusters/finalizers
+  - standalones/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - database.greatsql.cn
+  resources:
+  - groupreplicationclusters/status
+  - standalones/status
+  verbs:
+  - get
+  - patch
+  - update
+{{- end -}}

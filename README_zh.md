@@ -19,6 +19,8 @@ GreatSQL Operator 是一个用于在 Kubernetes 上部署和管理 GreatSQL 数�
 - 资源使用优化
 - 滚动升级支持
 
+![Architecture diagram](docs/img/architecture-diagram-zh.png)
+
 本项目基于 `Kubebuilder` 框架开发，允许您像管理原生 Kubernetes 资源一样管理 GreatSQL 数据库。
 
 ## 兼容性列表

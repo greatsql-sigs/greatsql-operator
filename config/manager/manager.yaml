@@ -79,14 +79,14 @@ spec:
         # seccompProfile:
         #   type: RuntimeDefault
       containers:
-      - name: manager
+      - name: operator-controller
         image: registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator:latest
         args:
           - --leader-elect=true
           - --leader-elect-namespace=greatsql-system
         env:
           # 控制operator的协调（reconciliation）循环的时间间隔，10s
-        - name: RECONCILIATION_INTERVAL
+        - name: "RECONCILIATION_INTERVAL"
           value: "10s"
         securityContext:
           allowPrivilegeEscalation: false

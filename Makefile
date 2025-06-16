@@ -8,6 +8,20 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# git
+VERSION    = $(shell git describe --tags --always)
+GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+#GIT_COMMIT = $(shell git rev-parse --short=7 HEAD)
+GIT_COMMIT = $(shell git rev-parse HEAD)
+BUILD_TIME = $(shell date +"%Y-%m-%d %H:%M:%S")
+
+define ldflags
+"-X 'github.com/greatsql-sigs/greatsql-operator/interanl/pkg/version.Version=${VERSION}' \
+ -X 'github.com/greatsql-sigs/greatsql-operator/interanl/pkg/version.GitBranch=${GIT_BRANCH}' \
+ -X 'github.com/greatsql-sigs/greatsql-operator/interanl/pkg/version.GitCommit=${GIT_COMMIT}' \
+ -X 'github.com/greatsql-sigs/greatsql-operator/interanl/pkg/version.BuildTime=${BUILD_TIME}'"
+endef
+
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
@@ -93,7 +107,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+	go build -ldflags ${ldflags} -o bin/operator-controller cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
