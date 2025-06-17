@@ -30,26 +30,33 @@ jobs:
         with:
           version: v3.12.3
 
-      - name: Package Helm charts
-        run: |
-          mkdir -p output
-          
-          if [ -f helm/index.html ]; then
-            cp helm/index.html output/index.html
-          fi
-          
-          for chart in helm/*/Chart.yaml; do
-            chart_dir=$(dirname "$chart")
-            helm package "$chart_dir" -d output
-          done
-
-          helm repo index output --url https://greatsql-sigs.github.io/greatsql-operator
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
         with:
-          path: './output'
+          charts_dir: dist/chart
+        env:
+          CR_TOKEN: "${{ secrets.ACCESS_TOKEN }}"
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # - name: Package Helm charts
+      #   run: |
+      #     mkdir -p output
+          
+      #     if [ -f helm/index.html ]; then
+      #       cp helm/index.html output/index.html
+      #     fi
+          
+      #     for chart in helm/*/Chart.yaml; do
+      #       chart_dir=$(dirname "$chart")
+      #       helm package "$chart_dir" -d output
+      #     done
+
+      #     helm repo index output --url https://greatsql-sigs.github.io/greatsql-operator
+
+      # - name: Upload artifact
+      #   uses: actions/upload-pages-artifact@v3
+      #   with:
+      #     path: './output'
+
+      # - name: Deploy to GitHub Pages
+      #   id: deployment
+      #   uses: actions/deploy-pages@v4
