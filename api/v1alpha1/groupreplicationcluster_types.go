@@ -63,6 +63,7 @@ type GroupReplicationClusterStatus struct {
 //+kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:resource:shortName=mgr
+//nolint:lll
 //+kubebuilder:printcolumn:name="Role",type="string",JSONPath=".status.role",description="The member role of the group replication cluster"
 //+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The current phase of the group replication cluster"
 //+kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message",description="The status message"

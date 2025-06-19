@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func NewSecretEnv(cr client.Object, scheme *runtime.Scheme, name, namespace string, envs []corev1.EnvVar) (*corev1.Secret, error) {
+func NewSecretEnv(cr client.Object, scheme *runtime.Scheme, name, namespace string) (*corev1.Secret, error) {
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",

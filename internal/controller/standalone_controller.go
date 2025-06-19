@@ -116,7 +116,6 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 	log := r.Log.WithValues("standalone", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
 
 	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, log, func(ctx context.Context, obj *v1alpha1.Standalone) error {
-
 		// 删除 Service
 		svc := &corev1.Service{}
 		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
@@ -138,15 +137,15 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 
 		// 删除 pvc
 		pvcList := &corev1.PersistentVolumeClaimList{}
-		err := r.Client.List(ctx, pvcList, client.InNamespace(obj.Namespace), client.MatchingLabels{
+		err := r.List(ctx, pvcList, client.InNamespace(obj.Namespace), client.MatchingLabels{
 			"app.kubernetes.io/name": obj.Name,
 		})
 		if err != nil {
 			log.Error(err, "Failed to list PVCs")
 		} else {
 			for _, pvc := range pvcList.Items {
-				pvc := pvc // 避免闭包引用错误
-				if err := r.Client.Delete(ctx, &pvc); err != nil {
+				// 避免闭包引用错误
+				if err := r.Delete(ctx, &pvc); err != nil {
 					log.Error(err, "Failed to delete PVC", "name", pvc.Name)
 				}
 			}
@@ -164,7 +163,10 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 }
 
 // createRequiredResources creates the required resources for the Standalone
-func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req ctrl.Request, cr *v1alpha1.Standalone) error {
+func (r *StandaloneReconciler) createRequiredResources(ctx context.Context,
+	req ctrl.Request,
+	cr *v1alpha1.Standalone,
+) error {
 	// 如果定义了 PriorityClassName，先创建 PriorityClass
 	if err := schedule.CreatePriorityClass(ctx, cr.Spec.Pod, r.Client); err != nil {
 		return err
@@ -181,12 +183,12 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 	}
 
 	// 创建 secret（只在有 secretKeyRef 时创建）
-	secretEnvs := []corev1.EnvVar{}
+	var secretEnvs []corev1.EnvVar
 	secretName := req.Name + "-secret"
 
 	// 从 cr.Spec.Pod.Container.Envs 中获取需要创建 secret 的环境变量
-	if cr.Spec.Pod != nil && cr.Spec.Pod.Container.Envs != nil {
-		for _, env := range cr.Spec.Pod.Container.Envs {
+	if cr.Spec.Pod != nil && cr.Spec.Container.Envs != nil {
+		for _, env := range cr.Spec.Container.Envs {
 			if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
 				secretEnvs = append(secretEnvs, env)
 			}
@@ -194,7 +196,7 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 	}
 
 	if len(secretEnvs) > 0 {
-		secret, err := kube.NewSecretEnv(cr, r.Scheme, secretName, req.Namespace, secretEnvs)
+		secret, err := kube.NewSecretEnv(cr, r.Scheme, secretName, req.Namespace)
 		if err != nil {
 			r.Log.Error(err, "Could not create secret from envs")
 		}
@@ -272,10 +274,12 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context, req 
 	return nil
 }
 
-func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.Standalone) (*v1alpha1.StandaloneStatus, error) {
+func (r *StandaloneReconciler) computeStatus(ctx context.Context,
+	cr *v1alpha1.Standalone,
+) (*v1alpha1.StandaloneStatus, error) {
 	r.Log.Info("Computing status")
 
-	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
+	if cr == nil || cr.DeletionTimestamp != nil {
 		return nil, nil
 	}
 
@@ -290,7 +294,7 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 	stateMachine := util.NewStateMachine(&result.Status)
 
 	stsList := &appsv1.StatefulSetList{}
-	err := r.Client.List(ctx, stsList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
+	err := r.List(ctx, stsList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +335,8 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context, cr *v1alpha1.S
 		_ = stateMachine.Transition(v1alpha1.PhaseError)
 		stateMachine.SetStatusMessage(fmt.Sprintf("Expected 1 StatefulSet, got %d", len(stsList.Items)))
 		stateMachine.SetStatusReason("MultipleStatefulSets")
-		return &v1alpha1.StandaloneStatus{Status: *stateMachine.GetStatus()}, fmt.Errorf("%d StatefulSets found, expected 1", len(stsList.Items))
+		return &v1alpha1.StandaloneStatus{Status: *stateMachine.GetStatus()}, fmt.Errorf(
+			"%d StatefulSets found, expected 1", len(stsList.Items))
 	}
 
 	// 更新 Status

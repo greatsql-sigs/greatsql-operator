@@ -9,7 +9,6 @@ package consts
 
 // labels const
 const (
-	AppKubernetesComponent string = "app.kubernetes.io/component"
-	AppKubernetesName      string = "app.kubernetes.io/name"
-	AppKubernetesInstance  string = "app.kubernetes.io/instance"
+	AppKubernetesName     string = "app.kubernetes.io/name"
+	AppKubernetesInstance string = "app.kubernetes.io/instance"
 )

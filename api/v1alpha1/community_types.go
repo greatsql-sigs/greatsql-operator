@@ -41,16 +41,16 @@ const (
 	PhasePaused       Phase = "paused"
 )
 
-// MySQLRouterSpec defines the desired state of MySQLRouter
+// Proxy defines the desired state of MySQLRouter
 // TODO:MySQLRouter is not implemented yet
 type Proxy struct {
 	Enabled bool `json:"enable,omitempty"`
 	Pod     `json:",inline"`
 }
 
-// SchedulingBuckup defines the desired state of SchedulingBuckup
-// TODO: SchedulingBuckup is not implemented yet
-type SchedulingBuckup struct {
+// SchedulingBackup defines the desired state of SchedulingBackup
+// TODO: SchedulingBackup is not implemented yet
+type SchedulingBackup struct {
 	//+kube:validation:Enum=true, false
 	Enable *bool `json:"enable,omitempty"`
 }
@@ -147,7 +147,7 @@ type Container struct {
 	StartupProbe     corev1.Probe                  `json:"startupProbe"`               // Startup probe
 	ReadinessProbe   corev1.Probe                  `json:"readinessProbe"`             // Readiness probe
 	LivenessProbe    corev1.Probe                  `json:"livenessProbe"`              // Liveness probe
-	SecurityContext  *corev1.SecurityContext       `json:"securityContext,omitempty"`  // Security context for the container
+	SecurityContext  *corev1.SecurityContext       `json:"securityContext,omitempty"`  //nolint:lll    // Security context for the container
 	Envs             []corev1.EnvVar               `json:"env,omitempty"`              // Environment variables
 }
 
@@ -168,7 +168,7 @@ type Pod struct {
 
 // Affinity defines the affinity/anti-affinity rules for the pod.
 type Affinity struct {
-	//+builder:default="kubernetes.io/hostname"
-	//+Optional
+	// +builder:default="kubernetes.io/hostname"
+	// +Optional
 	TopologyKey *string `json:"antiAffinityTopologyKey,omitempty"`
 }

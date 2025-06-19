@@ -12,7 +12,6 @@ import (
  */
 
 func TestConfig(t *testing.T) {
-
 	// string
 	cnfStr := NewConfig(
 		WithSinglePrimaryMode(true),
@@ -24,5 +23,4 @@ func TestConfig(t *testing.T) {
 
 	// file
 	cnfStr.WriteToFile("/tmp/my.cnf")
-
 }

@@ -19,7 +19,11 @@ import (
 const DefaultPersistentVolumeClaimSize = "10Gi"
 
 // BuildPersistentVolumeClaim 单个 PVC 通用规范
-func BuildPersistentVolumeClaim(cr any, mode corev1.PersistentVolumeAccessMode, size string, storageClassName *string) (corev1.PersistentVolumeClaim, error) {
+func BuildPersistentVolumeClaim(cr any,
+	mode corev1.PersistentVolumeAccessMode,
+	size string,
+	storageClassName *string,
+) (corev1.PersistentVolumeClaim, error) {
 	if size == "" {
 		size = DefaultPersistentVolumeClaimSize
 	}
@@ -52,7 +56,12 @@ func BuildPersistentVolumeClaim(cr any, mode corev1.PersistentVolumeAccessMode, 
 }
 
 // BuildPersistentVolumeClaims 多个 PVC 的通用规范
-func BuildPersistentVolumeClaims(cr any, accessModes []corev1.PersistentVolumeAccessMode, size string, storageClassName *string, count int) ([]corev1.PersistentVolumeClaim, error) {
+func BuildPersistentVolumeClaims(cr any,
+	accessModes []corev1.PersistentVolumeAccessMode,
+	size string,
+	storageClassName *string,
+	count int,
+) ([]corev1.PersistentVolumeClaim, error) {
 	if size == "" {
 		size = DefaultPersistentVolumeClaimSize
 	}
@@ -87,7 +96,9 @@ func BuildPersistentVolumeClaims(cr any, accessModes []corev1.PersistentVolumeAc
 }
 
 // SetPersistentVolumeConfig 设置 PersistentVolume 的通用配置
-func SetPersistentVolumeConfig(size string, mode *corev1.PersistentVolumeMode) (*resource.Quantity, *corev1.PersistentVolumeMode, error) {
+func SetPersistentVolumeConfig(size string,
+	mode *corev1.PersistentVolumeMode,
+) (*resource.Quantity, *corev1.PersistentVolumeMode, error) {
 	quantity, err := resource.ParseQuantity(size)
 	if err != nil {
 		return nil, nil, fmt.Errorf("invalid storage size format: %v", err)

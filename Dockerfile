@@ -14,7 +14,7 @@ ENV GOPROXY=https://goproxy.cn
 RUN go mod download
 
 # Copy the go source
-COPY cmd/ cmd/
+COPY ./cmd/ ./cmd/
 COPY api/ api/
 COPY internal/ internal/
 COPY Makefile Makefile

@@ -12,7 +12,12 @@ import (
 )
 
 // BuildStatefulSet 构建 StatefulSet
-func BuildStatefulSet(cr v1alpha1.Pod, replicas *int32, name, namespace, configMapName string) (*appsv1.StatefulSet, error) {
+func BuildStatefulSet(cr v1alpha1.Pod,
+	replicas *int32,
+	name,
+	namespace,
+	configMapName string,
+) (*appsv1.StatefulSet, error) {
 	labels := map[string]string{
 		"app.kubernetes.io/name":     name,
 		"app.kubernetes.io/instance": name,
@@ -129,7 +134,7 @@ func BuildStatefulSet(cr v1alpha1.Pod, replicas *int32, name, namespace, configM
 				Type: appsv1.RollingUpdateStatefulSetStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
 					Partition:      func() *int32 { p := int32(0); return &p }(),
-					MaxUnavailable: func() *intstr.IntOrString { v := intstr.FromInt(1); return &v }(),
+					MaxUnavailable: func() *intstr.IntOrString { v := intstr.FromInt32(1); return &v }(),
 				},
 			},
 		},

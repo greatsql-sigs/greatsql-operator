@@ -15,5 +15,5 @@ func GetUUID() string {
 func GetUUIDWithoutDashes() string {
 	uuid := uuid.New().String()
 
-	return strings.Replace(uuid, "-", "", -1)
+	return strings.ReplaceAll(uuid, "-", "")
 }

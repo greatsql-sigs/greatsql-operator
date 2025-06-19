@@ -118,7 +118,12 @@ func (r *ResourceHelper) DeleteResource(ctx context.Context, namespace string, n
 }
 
 // DeleteResourceWithFinalizer 删除资源，并设置 finalizer
-func (r *ResourceHelper) DeleteResourceWithFinalizer(ctx context.Context, namespace string, name string, obj client.Object, finalizer string) error {
+func (r *ResourceHelper) DeleteResourceWithFinalizer(ctx context.Context,
+	namespace string,
+	name string,
+	obj client.Object,
+	finalizer string,
+) error {
 	key := types.NamespacedName{Namespace: namespace, Name: name}
 	err := r.Client.Get(ctx, key, obj)
 	if err != nil {
@@ -133,7 +138,12 @@ func (r *ResourceHelper) DeleteResourceWithFinalizer(ctx context.Context, namesp
 }
 
 // DeleteResourceWithFinalizerAndOwner 删除资源，并设置 finalizer，并设置 ownerReference
-func (r *ResourceHelper) DeleteResourceWithFinalizerAndOwner(ctx context.Context, owner client.Object, namespace string, name string, obj client.Object, finalizer string) error {
+func (r *ResourceHelper) DeleteResourceWithFinalizerAndOwner(ctx context.Context,
+	namespace string,
+	name string,
+	obj client.Object,
+	finalizer string,
+) error {
 	key := types.NamespacedName{Namespace: namespace, Name: name}
 	err := r.Client.Get(ctx, key, obj)
 	if err != nil {
@@ -148,7 +158,7 @@ func (r *ResourceHelper) DeleteResourceWithFinalizerAndOwner(ctx context.Context
 }
 
 // ListResource 列出资源, 使用 informer 机制，防止因频繁查询资源导致性能问题
-func (r *ResourceHelper) ListResource(ctx context.Context, namespace string, obj client.Object) ([]client.Object, error) {
+func (r *ResourceHelper) ListResource(namespace string, obj client.Object) ([]client.Object, error) {
 	gvk, err := r.getGVK(obj)
 	if err != nil {
 		return nil, err
@@ -192,7 +202,11 @@ func (r *ResourceHelper) ListResource(ctx context.Context, namespace string, obj
 }
 
 // ResourceExists 检查资源是否存在
-func (r *ResourceHelper) ResourceExists(ctx context.Context, namespace string, name string, obj client.Object) (bool, error) {
+func (r *ResourceHelper) ResourceExists(ctx context.Context,
+	namespace string,
+	name string,
+	obj client.Object,
+) (bool, error) {
 	key := types.NamespacedName{Namespace: namespace, Name: name}
 	err := r.Client.Get(ctx, key, obj)
 	if err != nil {

@@ -53,6 +53,7 @@ type GroupReplicationClusterReconciler struct {
 	ResourceHelper *kube.ResourceHelper
 }
 
+//nolint:lll
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=groupreplicationclusters/finalizers,verbs=update
@@ -70,7 +71,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	r.Log.Info("Reconciling GroupReplicationCluster", req.NamespacedName)
 
 	mgr := &v1alpha1.GroupReplicationCluster{}
-	if err := r.Client.Get(ctx, req.NamespacedName, mgr); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, mgr); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Resource deleted, skip", req.NamespacedName)
 			return ctrl.Result{}, nil
@@ -94,7 +95,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	sts := &appsv1.StatefulSet{}
-	if err := r.Client.Get(ctx, req.NamespacedName, sts); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, sts); err != nil {
 		if err := r.createBaseResources(ctx, req, mgr); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -110,7 +111,12 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 }
 
 // transitionWithError 状态转换错误处理
-func (r *GroupReplicationClusterReconciler) transitionWithError(stateMachine *util.StateMachine, phase v1alpha1.Phase, reason, message string, err error) error {
+func (r *GroupReplicationClusterReconciler) transitionWithError(
+	stateMachine *util.StateMachine,
+	phase v1alpha1.Phase,
+	reason, message string,
+	err error,
+) error {
 	stateMachine.SetStatusMessage(message)
 	stateMachine.SetStatusReason(reason)
 	_ = stateMachine.Transition(phase)
@@ -136,7 +142,10 @@ func (r *GroupReplicationClusterReconciler) createBaseResources(
 	}
 
 	// 创建 Service
-	r.createService(ctx, req, cr, stateMachine)
+	err = r.createService(ctx, req, cr, stateMachine)
+	if err != nil {
+		return err
+	}
 
 	// 创建集群资源
 	if cr.Spec.IsSingleMode() {
@@ -181,46 +190,54 @@ func (r *GroupReplicationClusterReconciler) createService(
 }
 
 // handleFinalizer handles the finalizer of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context,
+	cr *v1alpha1.GroupReplicationCluster,
+) error {
 	log := r.Log.WithValues("groupreplicationcluster", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
 
-	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
-		// 删除 Secret
-		secret := &corev1.Secret{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, secret); err != nil {
-			log.Error(err, "Failed to delete Secret")
-			return err
-		}
+	return kube.HandleFinalizerWithCleanup(ctx,
+		r.Client,
+		cr,
+		log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
+			// 删除 Secret
+			secret := &corev1.Secret{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, secret); err != nil {
+				log.Error(err, "Failed to delete Secret")
+				return err
+			}
 
-		// 删除 Service
-		svc := &corev1.Service{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
-			log.Error(err, "Failed to delete Service")
-			return err
-		}
+			// 删除 Service
+			svc := &corev1.Service{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
+				log.Error(err, "Failed to delete Service")
+				return err
+			}
 
-		// 删除sts
-		sts := &appsv1.StatefulSet{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
-			log.Error(err, "Failed to delete StatefulSet")
-			return err
-		}
+			// 删除sts
+			sts := &appsv1.StatefulSet{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
+				log.Error(err, "Failed to delete StatefulSet")
+				return err
+			}
 
-		// 删除 ConfigMap
-		cm := &corev1.ConfigMap{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
-			log.Error(err, "Failed to delete ConfigMap")
-			return err
-		}
+			// 删除 ConfigMap
+			cm := &corev1.ConfigMap{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
+				log.Error(err, "Failed to delete ConfigMap")
+				return err
+			}
 
-		// TODO: 删除 PVC?
+			// TODO: 删除 PVC?
 
-		return nil
-	})
+			return nil
+		})
 }
 
 // createSinglePrimaryModeResources 创建单主模式的资源
-func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx context.Context,
+	req ctrl.Request,
+	mgr *v1alpha1.GroupReplicationCluster,
+) error {
 	steps := []struct {
 		name string
 		fn   func() error
@@ -243,7 +260,10 @@ func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx
 }
 
 // createMultiplePrimaryModeResources 创建多主模式的资源
-func (r *GroupReplicationClusterReconciler) createMultiplePrimaryModeResources(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) createMultiplePrimaryModeResources(ctx context.Context,
+	req ctrl.Request,
+	mgr *v1alpha1.GroupReplicationCluster,
+) error {
 	total := mgr.Spec.GetTotalMembers()
 	for i := 0; i < int(total); i++ {
 		if err := r.createConfigMap(ctx, req, mgr, i); err != nil {
@@ -282,10 +302,15 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 }
 
 // createConfigMap creates a ConfigMap for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context, req ctrl.Request, mgr *v1alpha1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createConfigMap(
+	ctx context.Context,
+	req ctrl.Request,
+	mgr *v1alpha1.GroupReplicationCluster,
+	ordinal int,
+) error {
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
 	exists := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, exists)
+	err := r.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, exists)
 	if err == nil {
 		r.Log.Info("ConfigMap already exists", "Name", configMapName)
 		return nil
@@ -296,7 +321,12 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 		return err
 	}
 
-	groupSeeds := []string{fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local:%d", req.Name, ordinal, req.Name, req.Namespace, consts.MgrCommunicatePort)}
+	groupSeeds := []string{
+		fmt.Sprintf(
+			"%s-%d.%s-headless.%s.svc.cluster.local:%d",
+			req.Name, ordinal, req.Name, req.Namespace, consts.MgrCommunicatePort,
+		),
+	}
 
 	memoryReq := mgr.Spec.Container.Resources.Requests.Memory().Value()
 	cnf := mysql.NewConfig(
@@ -304,16 +334,21 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 		mysql.WithEnableCluster(true),
 		mysql.WithGroupReplicationGroupName(util.GetUUID()),
 		mysql.WithGroupReplicationGroupSeeds(strings.Join(groupSeeds, ",")),
-		mysql.WithReportHost(fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace)),
+		mysql.WithReportHost(
+			fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local", req.Name, ordinal, req.Name, req.Namespace),
+		),
 		mysql.WithReportPort(3306),
 		mysql.WithInnodbBufferPoolSize(mysql.CalculateInnodbBufferPoolSize(memoryReq)),
 	)
 
 	// 判断当前节点是否为仲裁节点
-	// 条件: 1. 节点角色为仲裁者(Arbitrator)
-	//      2. Size 字段不为空
-	//      3. Size 值为 1
-	if mgr.Spec.Member[ordinal].Role == v1alpha1.ArbitratorRole && mgr.Spec.Member[ordinal].Size != nil && *mgr.Spec.Member[ordinal].Size == 1 {
+	// 条件:
+	//  1. 节点角色为仲裁者(Arbitrator)
+	//  2. Size 字段不为空
+	//  3. Size 值为 1
+	if mgr.Spec.Member[ordinal].Role == v1alpha1.ArbitratorRole &&
+		mgr.Spec.Member[ordinal].Size != nil &&
+		*mgr.Spec.Member[ordinal].Size == 1 {
 		cnf.GroupReplicationArbitrator = "ON"
 	} else {
 		cnf.GroupReplicationArbitrator = "OFF"
@@ -330,7 +365,11 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(ctx context.Context,
 }
 
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
-func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster, ordinal int) error {
+func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context,
+	req ctrl.Request,
+	cr *v1alpha1.GroupReplicationCluster,
+	ordinal int,
+) error {
 	// 如果定义了 PriorityClassName，先创建 PriorityClass
 	if err := schedule.CreatePriorityClass(ctx, cr.Spec.Pod, r.Client); err != nil {
 		return err
@@ -353,7 +392,7 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 			ContainerPort: 3306,
 			Protocol:      corev1.ProtocolTCP,
 		})
-	if err := r.Client.Create(ctx, sts); err != nil {
+	if err := r.Create(ctx, sts); err != nil {
 		r.Log.Error(err, "Could not create statefulSet")
 		return err
 	}
@@ -363,7 +402,7 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 
 // initializeSingleMasterCluster 初始化单节点集群
 func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v1alpha1.GroupReplicationCluster) error {
-	mysql := mysql.MySQL{
+	mySQL := mysql.MySQL{
 		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace),
 		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
@@ -377,11 +416,11 @@ func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
+			return mySQL.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
 		}},
-		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
-		{"start group replication", func() error { return kube.Retry(mysql.StartGroupReplication, 3, 10*time.Second) }},
-		{"wait for member online", func() error { return mysql.WaitForMemberState("ONLINE", 180) }},
+		{"grant privileges", func() error { return mySQL.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
+		{"start group replication", func() error { return kube.Retry(mySQL.StartGroupReplication, 3, 10*time.Second) }},
+		{"wait for member online", func() error { return mySQL.WaitForMemberState("ONLINE", 180) }},
 	}
 
 	for _, step := range steps {
@@ -395,7 +434,8 @@ func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v
 }
 
 // initializeMultipleMasterCluster 初始化多节点集群
-func (r *GroupReplicationClusterReconciler) initializeMultipleMasterCluster(mgr *v1alpha1.GroupReplicationCluster) error {
+func (r *GroupReplicationClusterReconciler) initializeMultipleMasterCluster(mgr *v1alpha1.GroupReplicationCluster,
+) error {
 	totalMembers := mgr.Spec.GetTotalMembers()
 
 	// 首先初始化主节点
@@ -424,7 +464,9 @@ func (r *GroupReplicationClusterReconciler) initializeMultipleMasterCluster(mgr 
 	return nil
 }
 
-func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.GroupReplicationCluster, mysql *mysql.MySQL) error {
+func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.GroupReplicationCluster,
+	mysql *mysql.MySQL,
+) error {
 	r.Log.Info("Bootstrapping primary node...")
 	r.EventRecorder.Event(mgr, "Normal", "Bootstrap", "Bootstrapping the cluster with the first node")
 
@@ -452,7 +494,10 @@ func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.G
 	return nil
 }
 
-func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.GroupReplicationCluster, ordinal int, mysql *mysql.MySQL) error {
+func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.GroupReplicationCluster,
+	ordinal int,
+	mysql *mysql.MySQL,
+) error {
 	r.Log.Info("Adding new node as secondary", "Node", ordinal)
 
 	primaryHost := fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace)
@@ -487,10 +532,12 @@ func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) e
 		Complete(r)
 }
 
-func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, cr *v1alpha1.GroupReplicationCluster) (*v1alpha1.GroupReplicationClusterStatus, error) {
+func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context,
+	cr *v1alpha1.GroupReplicationCluster,
+) (*v1alpha1.GroupReplicationClusterStatus, error) {
 	r.Log.Info("Computing status")
 
-	if cr == nil || cr.ObjectMeta.DeletionTimestamp != nil {
+	if cr == nil || cr.DeletionTimestamp != nil {
 		return nil, nil
 	}
 
@@ -505,13 +552,13 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 
 	// 获取所有Pod
 	podList := &corev1.PodList{}
-	err := r.Client.List(ctx, podList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
+	err := r.List(ctx, podList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
 	if err != nil {
 		return nil, err
 	}
 
 	// 获取MySQL连接信息
-	mysql := mysql.MySQL{
+	mySQL := mysql.MySQL{
 		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", cr.Name, cr.Name, cr.Namespace),
 		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
@@ -520,7 +567,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 	}
 
 	// 检查集群状态
-	isClusterExist, err := mysql.IsMGRClusterExist()
+	isClusterExist, err := mySQL.IsMGRClusterExist()
 	if err != nil {
 		r.Log.Error(err, "Failed to check cluster existence")
 		return nil, err
@@ -546,7 +593,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 
 	default:
 		// 获取当前节点的角色
-		memberState, err := mysql.GetMemberState()
+		memberState, err := mySQL.GetMemberState()
 		if err != nil {
 			r.Log.Error(err, "Failed to get member state")
 			return nil, err
@@ -556,7 +603,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 		switch memberState {
 		case "ONLINE":
 			// 检查是否是主节点
-			isPrimary, err := mysql.IsPrimary()
+			isPrimary, err := mySQL.IsPrimary()
 			if err != nil {
 				r.Log.Error(err, "Failed to check if primary")
 				return nil, err
@@ -593,7 +640,16 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context, c
 
 	if !reflect.DeepEqual(cr.Status, *result) {
 		cr.Status = *result
-		r.EventRecorder.Event(cr, "Normal", "StatusUpdated", fmt.Sprintf("GreatSQL status updated: %s, role: %s", result.Status.Phase, result.Status.Role))
+		r.EventRecorder.Event(
+			cr,
+			"Normal",
+			"StatusUpdated",
+			fmt.Sprintf(
+				"GreatSQL status updated: %s, role: %s",
+				result.Status.Phase,
+				result.Status.Role,
+			),
+		)
 		if err := r.Client.Status().Update(ctx, cr); err != nil {
 			r.Log.Error(err, "Could not update status")
 			return result, err

@@ -2,9 +2,8 @@ package util
 
 import (
 	"fmt"
-	"time"
-
 	"slices"
+	"time"
 
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 )

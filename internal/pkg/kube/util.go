@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// getPodByLabels 根据标签获取 Pod
+// GetPodByLabels 根据标签获取 Pod
 func GetPodByLabels(cli client.Reader, labelSelector string) ([]corev1.Pod, error) {
 	sel, err := labels.Parse(labelSelector)
 	if err != nil {
@@ -58,7 +58,7 @@ func UpdateStatusWithRetry(ctx context.Context, c client.Client, obj client.Obje
 		}
 
 		// 反射设置 status 字段
-		//accessor := meta.NewAccessor()
+		// accessor := meta.NewAccessor()
 		accessorInterface, ok := latest.(runtime.Object)
 		if !ok {
 			return fmt.Errorf("object does not implement runtime.Object")

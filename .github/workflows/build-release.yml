@@ -35,7 +35,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.23'
+          go-version: go.mod
 
       - name: Install Go dependencies
         run: go mod download

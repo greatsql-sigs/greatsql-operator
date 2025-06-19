@@ -18,7 +18,7 @@ import (
 //go:embed tmpl/my.cnf.tmpl
 var tmplFS embed.FS
 
-type MySQLConfig struct {
+type Config struct {
 	ServerID                     string
 	EnableCluster                bool
 	GroupReplicationGroupName    string
@@ -34,8 +34,8 @@ type MySQLConfig struct {
 }
 
 // NewConfig 创建一个新的MySQLConfig实例并设置默认值
-func NewConfig(opts ...Option) *MySQLConfig {
-	cfg := &MySQLConfig{
+func NewConfig(opts ...Option) *Config {
+	cfg := &Config{
 		EnableCluster:               false,
 		SinglePrimaryMode:           true,
 		GroupReplicationConsistency: "EVENTUAL",
@@ -48,7 +48,7 @@ func NewConfig(opts ...Option) *MySQLConfig {
 }
 
 // Render renders the configuration to a string using the embedded template.
-func (c *MySQLConfig) Render() (string, error) {
+func (c *Config) Render() (string, error) {
 	tmpl, err := template.ParseFS(tmplFS, "tmpl/my.cnf.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
@@ -62,12 +62,12 @@ func (c *MySQLConfig) Render() (string, error) {
 }
 
 // WriteToFile renders the config and writes it to the specified path.
-func (c *MySQLConfig) WriteToFile(path string) error {
+func (c *Config) WriteToFile(path string) error {
 	content, err := c.Render()
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", path, err)
 	}
 	return nil

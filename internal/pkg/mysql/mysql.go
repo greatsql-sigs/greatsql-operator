@@ -37,7 +37,8 @@ func (m *MySQL) NewClient(username, password, host, db string, port int32) (*sql
 	if err := dbConn.Ping(); err != nil {
 		closeErr := dbConn.Close()
 		if closeErr != nil {
-			return nil, fmt.Errorf("error verifying connection with database: %v, additionally failed to close connection: %v", err, closeErr)
+			return nil, fmt.Errorf(
+				"error verifying connection with database: %v, additionally failed to close connection: %v", err, closeErr)
 		}
 		return nil, fmt.Errorf("error verifying connection with database: %v", err)
 	}
@@ -88,7 +89,6 @@ func (m *MySQL) ModifyRootPassword(password string) error {
 
 // CreateUser create user
 func (m *MySQL) CreateUser(username, password string) error {
-
 	exist, err := m.isUserExist(username)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (m *MySQL) isUserExist(username string) (bool, error) {
 	return false, nil
 }
 
-// isClusterExist check cluster exist
+// IsMGRClusterExist check cluster exist
 func (m *MySQL) IsMGRClusterExist() (bool, error) {
 	sql := "SELECT 1 FROM performance_schema.replication_group_members LIMIT 1;"
 	rows, err := m.rowsQuery(sql)
@@ -146,7 +146,6 @@ func (m *MySQL) IsMGRClusterExist() (bool, error) {
 
 // GrantPrivileges grant privileges
 func (m *MySQL) GrantPrivileges(username string) error {
-
 	globalPrivileges := []string{
 		"RELOAD", "SHUTDOWN", "PROCESS", "FILE", "SELECT", "SUPER",
 		"REPLICATION SLAVE", "REPLICATION CLIENT", "REPLICATION_APPLIER",
@@ -250,10 +249,16 @@ func (m *MySQL) WaitForPrimaryAvailable(primaryHost string, timeoutSeconds int) 
 			m.UserName, m.Password, primaryHost, m.DB))
 		if err == nil {
 			if err = db.Ping(); err == nil {
-				db.Close()
+				err := db.Close()
+				if err != nil {
+					return err
+				}
 				return nil
 			}
-			db.Close()
+			err := db.Close()
+			if err != nil {
+				return err
+			}
 		}
 		time.Sleep(time.Second)
 	}
@@ -266,7 +271,12 @@ func (m *MySQL) queryRow(query string, args ...interface{}) *sql.Row {
 	if err != nil {
 		return nil
 	}
-	defer db.Close()
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+			fmt.Println("Error closing database connection:", err)
+		}
+	}(db)
 	return db.QueryRow(query, args...)
 }
 

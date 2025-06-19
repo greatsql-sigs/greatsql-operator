@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// PriorityClassConfig 定义创建所需配置
+// PriorityClassFields 定义创建所需配置
 type PriorityClassFields struct {
 	Name          string
 	Value         int32

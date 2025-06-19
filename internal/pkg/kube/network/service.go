@@ -24,21 +24,21 @@ func BuildServices(cr any, service v1alpha1.Service) (*corev1.Service, error) {
 		{
 			Name:       "mysql",
 			Port:       3306,
-			TargetPort: intstr.FromInt(3306),
+			TargetPort: intstr.FromInt32(3306),
 			Protocol:   corev1.ProtocolTCP,
 		},
 		{
 			Name: "mysql-x-protocol",
 			// MySQL X Protocol 默认端口
 			Port:       33060,
-			TargetPort: intstr.FromInt(33060),
+			TargetPort: intstr.FromInt32(33060),
 			Protocol:   corev1.ProtocolTCP,
 		},
 	}
 
 	// 内部、外部流量策略默认为本地级别，否则会因为NAT/SNAT引起 客户端连接时断连、连接 reset 、连接超时、多节点访问时会话不稳定等问题
 	// 参考：https://kubernetes.io/zh-cn/docs/concepts/services-networking/service/#external-traffic-policy
-	inernalTrafficPolicy := corev1.ServiceInternalTrafficPolicyLocal
+	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyLocal
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyLocal
 
 	// 设置默认选择器
@@ -70,7 +70,7 @@ func BuildServices(cr any, service v1alpha1.Service) (*corev1.Service, error) {
 		},
 		Spec: corev1.ServiceSpec{
 			Type:                  serviceType,
-			InternalTrafficPolicy: &inernalTrafficPolicy,
+			InternalTrafficPolicy: &internalTrafficPolicy,
 			ExternalTrafficPolicy: externalTrafficPolicy,
 			Ports:                 ports,
 			Selector:              selector,

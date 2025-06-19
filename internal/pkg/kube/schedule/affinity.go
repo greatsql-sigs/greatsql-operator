@@ -64,7 +64,7 @@ func SetPodAffinity(cr any, labels map[string]string) *corev1.Affinity {
 
 // SetPodAntiAffinity 设置Pod的反亲和性配置
 func SetPodAntiAffinity(spec v1alpha1.StandaloneSpec, labels map[string]string) *corev1.Affinity {
-	if spec.Pod.Affinity == nil {
+	if spec.Affinity == nil {
 		return nil
 	}
 
@@ -77,7 +77,7 @@ func SetPodAntiAffinity(spec v1alpha1.StandaloneSpec, labels map[string]string) 
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: labels,
 					},
-					TopologyKey: *spec.Pod.Affinity.TopologyKey,
+					TopologyKey: *spec.Affinity.TopologyKey,
 				},
 			},
 		},

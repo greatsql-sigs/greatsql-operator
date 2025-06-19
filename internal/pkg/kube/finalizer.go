@@ -15,8 +15,8 @@ const finalizer = "database.greatsql.cn/finalizer"
 // HandleFinalizerWithCleanup handles the finalizer for a Kubernetes object.
 func HandleFinalizerWithCleanup[T client.Object](
 	ctx context.Context, c client.Client,
-	obj T, log logr.Logger, cleanupFn func(context.Context, T) error) error {
-
+	obj T, log logr.Logger, cleanupFn func(context.Context, T) error,
+) error {
 	if reflect.ValueOf(obj).IsNil() {
 		log.Error(nil, "object is nil")
 		return fmt.Errorf("object is nil")
