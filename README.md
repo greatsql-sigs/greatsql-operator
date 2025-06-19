@@ -22,6 +22,8 @@ GreatSQL Operator is a tool for deploying and managing GreatSQL database cluster
 - Resource usage optimization
 - Rolling upgrade support
 
+![Architecture diagram](docs/img/architecture-diagram-en.png)
+
 This project is developed based on the `Kubebuilder` framework, allowing you to manage GreatSQL databases like native Kubernetes resources.
 
 ## Compatibility List

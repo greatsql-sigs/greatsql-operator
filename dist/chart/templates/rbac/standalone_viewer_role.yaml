@@ -1,0 +1,24 @@
+{{- if .Values.rbac.enable }}
+# permissions for end users to view singles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: Standalone-viewer-role
+rules:
+- apiGroups:
+  - database.greatsql.cn
+  resources:
+  - singles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - database.greatsql.cn
+  resources:
+  - singles/status
+  verbs:
+  - get
+{{- end -}}
