@@ -132,7 +132,7 @@ func (r *GroupReplicationClusterReconciler) createBaseResources(
 
 	// 创建 Secret
 	secret, err := kube.NewSecretEnv(
-		cr, r.Scheme, req.Name+"-secret", req.Namespace, cr.Spec.Container.Envs,
+		cr, r.Scheme, req.Name+"-secret", req.Namespace,
 	)
 	if err != nil {
 		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
