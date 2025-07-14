@@ -5,13 +5,13 @@ import (
 )
 
 var (
-	Version   string = ""
-	GitBranch string = ""
-	GitCommit string = ""
-	BuildTime string = ""
-	GoVersion string = ""
-	Compiler  string = ""
-	Platform  string = ""
+	Version   = ""
+	GitBranch = ""
+	GitCommit = ""
+	BuildTime = ""
+	GoVersion = ""
+	Compiler  = ""
+	Platform  = ""
 )
 
 type Info struct {

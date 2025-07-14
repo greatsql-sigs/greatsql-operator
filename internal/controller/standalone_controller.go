@@ -19,14 +19,13 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/statemachine"
 	"reflect"
 	"time"
 
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/schedule"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/workload"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/util"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -115,51 +114,53 @@ func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1.Standalone) error {
 	log := r.Log.WithValues("standalone", types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace})
 
-	return kube.HandleFinalizerWithCleanup(ctx, r.Client, cr, log, func(ctx context.Context, obj *v1alpha1.Standalone) error {
-		// 删除 Service
-		svc := &corev1.Service{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
-			log.Error(err, "Failed to delete Service")
-			return err
-		}
-		// 删除 ConfigMap
-		cm := &corev1.ConfigMap{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
-			log.Error(err, "Failed to delete ConfigMap")
-			return err
-		}
+	return kube.HandleFinalizerWithCleanup(
+		ctx, r.Client, cr, log,
+		func(ctx context.Context, obj *v1alpha1.Standalone) error {
+			// 删除 service
+			svc := &corev1.Service{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
+				log.Error(err, "Failed to delete Service")
+				return err
+			}
 
-		// 删除 StatefulSet
-		sts := &appsv1.StatefulSet{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
-			log.Error(err, "Failed to delete StatefulSet")
-		}
+			// 删除 ConfigMap
+			cm := &corev1.ConfigMap{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
+				log.Error(err, "Failed to delete ConfigMap")
+				return err
+			}
 
-		// 删除 pvc
-		pvcList := &corev1.PersistentVolumeClaimList{}
-		err := r.List(ctx, pvcList, client.InNamespace(obj.Namespace), client.MatchingLabels{
-			"app.kubernetes.io/name": obj.Name,
-		})
-		if err != nil {
-			log.Error(err, "Failed to list PVCs")
-		} else {
-			for _, pvc := range pvcList.Items {
-				// 避免闭包引用错误
-				if err := r.Delete(ctx, &pvc); err != nil {
-					log.Error(err, "Failed to delete PVC", "name", pvc.Name)
+			// 删除 StatefulSet
+			sts := &appsv1.StatefulSet{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
+				log.Error(err, "Failed to delete StatefulSet")
+			}
+
+			// 删除 pvc
+			pvcList := &corev1.PersistentVolumeClaimList{}
+			err := r.List(ctx, pvcList, client.InNamespace(obj.Namespace), client.MatchingLabels{
+				"app.kubernetes.io/name": obj.Name,
+			})
+			if err != nil {
+				log.Error(err, "Failed to list PVCs")
+			} else {
+				for _, pvc := range pvcList.Items {
+					// 避免闭包引用错误
+					if err := r.Delete(ctx, &pvc); err != nil {
+						log.Error(err, "Failed to delete PVC", "name", pvc.Name)
+					}
 				}
 			}
-		}
 
-		// 删除 Secret
-		secret := &corev1.Secret{}
-		if err := r.ResourceHelper.DeleteResource(ctx, obj.Name+"-secret", obj.Namespace, secret); err != nil {
-			log.Error(err, "Failed to delete Secret")
-			return err
-		}
-
-		return nil
-	})
+			// 删除 Secret
+			secret := &corev1.Secret{}
+			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name+"-secret", obj.Namespace, secret); err != nil {
+				log.Error(err, "Failed to delete Secret")
+				return err
+			}
+			return nil
+		})
 }
 
 // createRequiredResources creates the required resources for the Standalone
@@ -291,7 +292,7 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context,
 		},
 	}
 
-	stateMachine := util.NewStateMachine(&result.Status)
+	stateMachine := statemachine.NewStateMachine(&result.Status)
 
 	stsList := &appsv1.StatefulSetList{}
 	err := r.List(ctx, stsList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})

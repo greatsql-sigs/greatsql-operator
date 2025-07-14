@@ -13,7 +13,7 @@ func GetUUID() string {
 
 // GetUUIDWithoutDashes generates a new UUID not horizontal line
 func GetUUIDWithoutDashes() string {
-	uuid := uuid.New().String()
+	u := uuid.New().String()
 
-	return strings.ReplaceAll(uuid, "-", "")
+	return strings.ReplaceAll(u, "-", "")
 }

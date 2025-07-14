@@ -36,6 +36,7 @@ import (
 
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/controller"
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/version"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -120,7 +121,7 @@ func main() {
 		WebhookServer:           webhookServer,
 		HealthProbeBindAddress:  probeAddr,
 		LeaderElection:          enableLeaderElection,
-		LeaderElectionID:        "operator.controller.greatsql.cn",
+		LeaderElectionID:        "controller.greatsql.cn",
 		LeaderElectionNamespace: leaderElectionNamespace,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
@@ -139,6 +140,17 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	info := version.GetVersion()
+	setupLog.Info("[greatsql controller manager]",
+		"version", info.Version,
+		"gitBranch", info.GitBranch,
+		"gitCommit", info.GitCommit,
+		"buildTime", info.BuildTime,
+		"goVersion", info.GoVersion,
+		"compiler", info.Compiler,
+		"platform", info.Platform,
+	)
 
 	if err = (&controller.StandaloneReconciler{
 		Client:        mgr.GetClient(),
