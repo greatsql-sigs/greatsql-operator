@@ -40,9 +40,6 @@ spec:
         port: 3306
       initialDelaySeconds: 30
       periodSeconds: 10
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
     env:
       - name: LOWER_CASE_TABLE_NAMES
         value: "0"
@@ -62,12 +59,9 @@ spec:
   schedulerName: default-scheduler
   terminationGracePeriodSeconds: 30
   podSecurityContext:
-    runAsUser: 1000
-    runAsGroup: 1000
     fsGroup: 1000
   dnsPolicy: ClusterFirst
   restartPolicy: Always
-  priorityClassName: greatsql-priority
 
   storages:
     storageClassName: standard

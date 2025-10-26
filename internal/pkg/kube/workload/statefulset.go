@@ -114,7 +114,7 @@ func BuildStatefulSet(cr v1alpha1.Pod,
 					ServiceAccountName:            cr.ServiceAccountName,
 					SecurityContext:               cr.PodSecurityContext,
 					NodeSelector:                  cr.NodeSelector,
-					PriorityClassName:             *cr.PriorityClassName,
+					PriorityClassName:             getPriorityClassName(cr.PriorityClassName),
 					Tolerations:                   cr.Tolerations,
 				},
 			},
@@ -141,4 +141,11 @@ func BuildStatefulSet(cr v1alpha1.Pod,
 	}
 
 	return sts, nil
+}
+
+func getPriorityClassName(priorityClassName *string) string {
+	if priorityClassName == nil {
+		return ""
+	}
+	return *priorityClassName
 }

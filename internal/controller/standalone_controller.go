@@ -19,9 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/statemachine"
 	"reflect"
 	"time"
+
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/state"
 
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/schedule"
@@ -90,6 +91,11 @@ func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Handle finalizer
 	if err := r.handleFinalizer(ctx, cr); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// If the object is being deleted, stop reconciliation
+	if cr.GetDeletionTimestamp() != nil {
+		return ctrl.Result{}, nil
 	}
 
 	// Create required resources
@@ -292,7 +298,7 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context,
 		},
 	}
 
-	stateMachine := statemachine.NewStateMachine(&result.Status)
+	stateMachine := state.NewStateMachine(&result.Status)
 
 	stsList := &appsv1.StatefulSetList{}
 	err := r.List(ctx, stsList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})

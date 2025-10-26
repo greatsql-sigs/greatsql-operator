@@ -66,7 +66,8 @@ func EnsurePriorityClass(client client.Client, field PriorityClassFields) error 
 // CreatePriorityClass 创建 PriorityClass
 func CreatePriorityClass(ctx context.Context, cr *v1alpha1.Pod, cli client.Client) error {
 	if cr.PriorityClassName == nil {
-		return fmt.Errorf("PriorityClassName is nil, skip create PriorityClass")
+		// PriorityClassName 未设置，无需创建，直接返回
+		return nil
 	}
 
 	priorityClass := &schedulingv1.PriorityClass{

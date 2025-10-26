@@ -19,10 +19,11 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/statemachine"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/state"
 
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/network"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/kube/schedule"
@@ -81,7 +82,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	// 初始化状态机
-	stateMachine := statemachine.NewStateMachine(&mgr.Status.Status)
+	stateMachine := state.NewStateMachine(&mgr.Status.Status)
 
 	// if err := mgr.Spec.ValidateClusterSpec(); err != nil {
 	// 	return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "InvalidSpec", err.Error(), err)
@@ -89,6 +90,11 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 
 	if err := r.handleFinalizer(ctx, mgr); err != nil {
 		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "FinalizerError", err.Error(), err)
+	}
+
+	// If the object is being deleted, stop reconciliation
+	if mgr.GetDeletionTimestamp() != nil {
+		return ctrl.Result{}, nil
 	}
 
 	if mgr.Status.Status.Phase == v1alpha1.PhaseError {
@@ -113,7 +119,7 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 
 // transitionWithError 状态转换错误处理
 func (r *GroupReplicationClusterReconciler) transitionWithError(
-	stateMachine *statemachine.StateMachine,
+	stateMachine *state.StateMachine,
 	phase v1alpha1.Phase,
 	reason, message string,
 	err error,
@@ -128,7 +134,7 @@ func (r *GroupReplicationClusterReconciler) transitionWithError(
 func (r *GroupReplicationClusterReconciler) createBaseResources(
 	ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster,
 ) error {
-	stateMachine := statemachine.NewStateMachine(&cr.Status.Status)
+	stateMachine := state.NewStateMachine(&cr.Status.Status)
 	_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
 
 	// 创建 Secret
@@ -163,7 +169,7 @@ func (r *GroupReplicationClusterReconciler) createBaseResources(
 
 // createService 创建service
 func (r *GroupReplicationClusterReconciler) createService(
-	ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster, stateMachine *statemachine.StateMachine,
+	ctx context.Context, req ctrl.Request, cr *v1alpha1.GroupReplicationCluster, stateMachine *state.StateMachine,
 ) error {
 	svcSpec := cr.Spec.Service
 	baseService, err := network.BuildServices(cr, *svcSpec)
@@ -249,7 +255,7 @@ func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx
 		{"init cluster", func() error { return r.initializeSingleMasterCluster(mgr) }},
 	}
 
-	stateMachine := statemachine.NewStateMachine(&mgr.Status.Status)
+	stateMachine := state.NewStateMachine(&mgr.Status.Status)
 	for _, step := range steps {
 		if err := step.fn(); err != nil {
 			return r.transitionWithError(stateMachine, v1alpha1.PhaseError, step.name+"Error", err.Error(), err)
@@ -549,7 +555,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context,
 		},
 	}
 
-	stateMachine := statemachine.NewStateMachine(&result.Status)
+	stateMachine := state.NewStateMachine(&result.Status)
 
 	// 获取所有Pod
 	podList := &corev1.PodList{}
