@@ -42,12 +42,12 @@ For detailed deployment instructions, please refer to the [Project Manual](docs/
 Please see our [Contribution Guide](./CONTRIBUTING_zh.md) for details on how to contribute to this project.
 
 ## Roadmap
-- [ ] Standalone instance
+- [x] Standalone instance
 - [ ] Cluster instance
   - [ ] Single master
   - [ ] Multi-master
-- [ ] Automatic failover
-- [ ] Self-healing
+- [x] Automatic failover
+- [x] Self-healing
 - [ ] Backup and restore
   - [ ] Logical backup
   - [ ] Physical backup
