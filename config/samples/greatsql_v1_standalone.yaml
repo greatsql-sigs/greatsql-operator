@@ -43,11 +43,11 @@ spec:
     env:
       - name: LOWER_CASE_TABLE_NAMES
         value: "0"
-      - name: MYSQL_ROOT_PASSWORD
-        valueFrom:
-          secretKeyRef:
-            name: greatsql-standalone-secret
-            key: MYSQL_ROOT_PASSWORD
+      # - name: MYSQL_ROOT_PASSWORD
+      #   valueFrom:
+      #     secretKeyRef:
+      #       name: greatsql-standalone-secret
+      #       key: MYSQL_ROOT_PASSWORD
 
   affinity:
     antiAffinityTopologyKey: "kubernetes.io/hostname"

@@ -9,13 +9,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-04-07 17:07:56
- * @file: client.go
- * @description: mysql client
- */
-
 // MySQL mysql
 type MySQL struct {
 	UserName string
@@ -299,4 +292,43 @@ func (m *MySQL) GetMemberState() (string, error) {
 	var state string
 	err := m.queryRow(query).Scan(&state)
 	return state, err
+}
+
+// MemberInfo 成员信息
+type MemberInfo struct {
+	MemberHost  string // 成员主机名
+	MemberRole  string // 成员角色: PRIMARY 或 SECONDARY
+	MemberState string // 成员状态: ONLINE, RECOVERING, OFFLINE, ERROR, UNREACHABLE
+}
+
+// GetAllMembers 获取所有成员的状态
+func (m *MySQL) GetAllMembers() ([]MemberInfo, error) {
+	query := `SELECT MEMBER_HOST, MEMBER_ROLE, MEMBER_STATE 
+			  FROM performance_schema.replication_group_members
+			  ORDER BY MEMBER_HOST`
+
+	rows, err := m.rowsQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			fmt.Println("Error closing rows:", err)
+		}
+	}()
+
+	var members []MemberInfo
+	for rows.Next() {
+		var member MemberInfo
+		if err := rows.Scan(&member.MemberHost, &member.MemberRole, &member.MemberState); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return members, nil
 }

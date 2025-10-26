@@ -44,7 +44,7 @@ Please see our [Contribution Guide](./CONTRIBUTING_zh.md) for details on how to 
 ## Roadmap
 - [x] Standalone instance
 - [ ] Cluster instance
-  - [ ] Single master
+  - [x] Single master
   - [ ] Multi-master
 - [x] Automatic failover
 - [x] Self-healing

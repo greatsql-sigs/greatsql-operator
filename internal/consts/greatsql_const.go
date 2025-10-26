@@ -32,10 +32,8 @@ const (
 const (
 	// password key
 	MYSQL_ROOT_PASSWORD_KEY string = "MYSQL_ROOT_PASSWORD"
-	// password
-	MYSQL_ROOT_PASSWORD_VALUE string = "GreatSQL@2025"
+	// replication channel password key
+	REPLCATION_CHANNEL_PASSWORD_KEY string = "MYSQL_REPLICATION_PASSWORD"
 	// default replication channel user
 	REPLCATION_CHANNEL_USER string = "repl"
-	// default replication channel password
-	REPLCATION_CHANNEL_PASSWORD string = "GreatSQL@2025"
 )

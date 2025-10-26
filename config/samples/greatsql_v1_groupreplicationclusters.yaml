@@ -51,7 +51,7 @@ spec:
       runAsUser: 0
       runAsGroup: 0
     env:
-      - name: PASSWORD
+      - name: MYSQL_ROOT_PASSWORD
         valueFrom:
           secretKeyRef:
             name: greatsql-mgr-secret
@@ -92,7 +92,7 @@ spec:
   service:
     type: LoadBalancer
     selector:
-      app: greatsql-mgr
+      app.kubernetes.io/name: greatsql-mgr
     # loadBalancerClass: "service.k8s.aws/nlb"
     # annotations:
     #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"

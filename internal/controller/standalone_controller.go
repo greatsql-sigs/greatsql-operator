@@ -130,9 +130,10 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 				return err
 			}
 
-			// 删除 ConfigMap
+			// 删除 ConfigMap（使用 config-0 命名）
 			cm := &corev1.ConfigMap{}
-			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
+			configMapName := fmt.Sprintf("%s-config-0", obj.Name)
+			if err := r.ResourceHelper.DeleteResource(ctx, configMapName, obj.Namespace, cm); err != nil {
 				log.Error(err, "Failed to delete ConfigMap")
 				return err
 			}
@@ -161,7 +162,8 @@ func (r *StandaloneReconciler) handleFinalizer(ctx context.Context, cr *v1alpha1
 
 			// 删除 Secret
 			secret := &corev1.Secret{}
-			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name+"-secret", obj.Namespace, secret); err != nil {
+			secretName := r.getSecretName(obj)
+			if err := r.ResourceHelper.DeleteResource(ctx, secretName, obj.Namespace, secret); err != nil {
 				log.Error(err, "Failed to delete Secret")
 				return err
 			}
@@ -189,30 +191,35 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context,
 		return err
 	}
 
-	// 创建 secret（只在有 secretKeyRef 时创建）
-	var secretEnvs []corev1.EnvVar
-	secretName := req.Name + "-secret"
-
-	// 从 cr.Spec.Pod.Container.Envs 中获取需要创建 secret 的环境变量
+	// 检查是否需要创建 Secret（如果用户没有通过 env 挂载自己的 Secret）
+	var envs []corev1.EnvVar
 	if cr.Spec.Pod != nil && cr.Spec.Container.Envs != nil {
-		for _, env := range cr.Spec.Container.Envs {
-			if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
-				secretEnvs = append(secretEnvs, env)
-			}
-		}
+		envs = cr.Spec.Container.Envs
 	}
 
-	if len(secretEnvs) > 0 {
-		secret, err := kube.NewSecretEnv(cr, r.Scheme, secretName, req.Namespace)
+	defaultSecretName := req.Name + "-secret"
+	secretName, needCreateSecret := kube.DetectUserSecret(
+		envs,
+		defaultSecretName,
+		consts.MYSQL_ROOT_PASSWORD_KEY,
+	)
+
+	if !needCreateSecret {
+		r.Log.Info("Using user-provided secret", "secretName", secretName)
+	}
+
+	// 只在用户没有提供 Secret 时才自动创建
+	if needCreateSecret {
+		r.Log.Info("No user-provided secret found, creating default secret", "secretName", secretName)
+		secret, err := kube.NewSecretEnv(cr, r.Scheme, secretName, req.Namespace, false)
 		if err != nil {
 			r.Log.Error(err, "Could not create secret from envs")
+			return err
 		}
 		if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, secret); err != nil {
 			r.Log.Error(err, "Could not create secret")
 			return err
 		}
-	} else {
-		r.Log.Info("No secretKeyRef found in envs, skipping secret creation")
 	}
 
 	// 创建 MySQL 配置
@@ -233,13 +240,15 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context,
 		r.Log.Error(err, "Could not get configMap data")
 		return err
 	}
-	configMap := kube.BuildConfigMap(req.Name+"-config", req.Namespace, "my.cnf", data)
+	// 对于 Standalone，使用 config-0 命名以保持与 StatefulSet 一致
+	configMapName := fmt.Sprintf("%s-config-0", req.Name)
+	configMap := kube.BuildConfigMap(configMapName, req.Namespace, "my.cnf", data)
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, configMap); err != nil {
 		r.Log.Error(err, "Could not create configMap")
 		return err
 	}
 
-	sts, err := workload.BuildStatefulSet(*cr.Spec.Pod, cr.Spec.Size, req.Name, req.Namespace, configMap.Name)
+	sts, err := workload.BuildStatefulSet(*cr.Spec.Pod, cr.Spec.Size, req.Name, req.Namespace, configMapName)
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
 		corev1.ContainerPort{
 			Name:          "mysqlx",
@@ -310,8 +319,8 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context,
 	case 0:
 		r.Log.Info("no StatefulSet found")
 		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-		stateMachine.SetStatusMessage("Waiting for StatefulSet to be created")
-		stateMachine.SetStatusReason("NotFound")
+		stateMachine.SetStatusMessage(consts.StatusMessageWaitingForStatefulSet)
+		stateMachine.SetStatusReason(consts.StatusReasonNotFound)
 		stateMachine.SetReady(0)
 
 	case 1:
@@ -325,23 +334,23 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context,
 		switch {
 		case ready == 0:
 			_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-			stateMachine.SetStatusMessage("Waiting for pods to be ready")
-			stateMachine.SetStatusReason("ReadinessZero")
+			stateMachine.SetStatusMessage(consts.StatusMessageWaitingForPods)
+			stateMachine.SetStatusReason(consts.StatusReasonReadinessZero)
 		case ready > 0:
 			_ = stateMachine.Transition(v1alpha1.PhaseReady)
-			stateMachine.SetStatusMessage("All pods are ready")
-			stateMachine.SetStatusReason("Healthy")
+			stateMachine.SetStatusMessage(consts.StatusMessageAllPodsReady)
+			stateMachine.SetStatusReason(consts.StatusReasonHealthy)
 		default:
 			_ = stateMachine.Transition(v1alpha1.PhaseError)
-			stateMachine.SetStatusMessage("Unexpected readiness state")
-			stateMachine.SetStatusReason("Unknown")
+			stateMachine.SetStatusMessage(consts.StatusMessageUnexpectedReadyState)
+			stateMachine.SetStatusReason(consts.StatusReasonUnknown)
 		}
 
 	default:
 		r.Log.Info("too many StatefulSet found", "count", len(stsList.Items))
 		_ = stateMachine.Transition(v1alpha1.PhaseError)
 		stateMachine.SetStatusMessage(fmt.Sprintf("Expected 1 StatefulSet, got %d", len(stsList.Items)))
-		stateMachine.SetStatusReason("MultipleStatefulSets")
+		stateMachine.SetStatusReason(consts.StatusReasonValidationError)
 		return &v1alpha1.StandaloneStatus{Status: *stateMachine.GetStatus()}, fmt.Errorf(
 			"%d StatefulSets found, expected 1", len(stsList.Items))
 	}
@@ -360,6 +369,22 @@ func (r *StandaloneReconciler) computeStatus(ctx context.Context,
 
 	r.Log.V(1).Info("Before update status", "status", cr.Status)
 	return &cr.Status, nil
+}
+
+// getSecretName 获取 Secret 名称（优先使用用户提供的，否则使用默认生成的）
+func (r *StandaloneReconciler) getSecretName(cr *v1alpha1.Standalone) string {
+	var envs []corev1.EnvVar
+	if cr.Spec.Pod != nil && cr.Spec.Container.Envs != nil {
+		envs = cr.Spec.Container.Envs
+	}
+
+	defaultSecretName := fmt.Sprintf("%s-secret", cr.Name)
+	secretName, _ := kube.DetectUserSecret(
+		envs,
+		defaultSecretName,
+		consts.MYSQL_ROOT_PASSWORD_KEY,
+	)
+	return secretName
 }
 
 // SetupWithManager sets up the controller with the Manager.

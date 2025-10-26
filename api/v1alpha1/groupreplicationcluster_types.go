@@ -64,12 +64,11 @@ type GroupReplicationClusterStatus struct {
 // +kubebuilder:storageversion
 // +kubebuilder:resource:shortName=mgr
 //nolint:lll
-//+kubebuilder:printcolumn:name="Role",type="string",JSONPath=".status.role",description="The member role of the group replication cluster"
-//+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The current phase of the group replication cluster"
-//+kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message",description="The status message"
-//+kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.reason",description="The status reason"
+//+kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.status.phase",description="The current phase of the group replication cluster"
+//+kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.status.ready",description="The number of ready members"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-//+kubebuilder:printcolumn:name="Ready",type="integer",JSONPath=".status.ready",description="The number of ready members"
+//+kubebuilder:printcolumn:name="Message",type="string",priority=1,JSONPath=".status.status.message",description="The status message"
+//+kubebuilder:printcolumn:name="Reason",type="string",priority=1,JSONPath=".status.status.reason",description="The status reason"
 
 // GroupReplicationCluster is the Schema for the GroupReplicationClusters API
 type GroupReplicationCluster struct {

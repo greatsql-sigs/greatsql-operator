@@ -17,29 +17,27 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The member role of the group replication cluster
-      jsonPath: .status.role
-      name: Role
-      type: string
     - description: The current phase of the group replication cluster
-      jsonPath: .status.phase
+      jsonPath: .status.status.phase
       name: Phase
       type: string
-    - description: The status message
-      jsonPath: .status.message
-      name: Message
-      type: string
-    - description: The status reason
-      jsonPath: .status.reason
-      name: Reason
+    - description: The number of ready members
+      jsonPath: .status.status.ready
+      name: Ready
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - description: The number of ready members
-      jsonPath: .status.ready
-      name: Ready
-      type: integer
+    - description: The status message
+      jsonPath: .status.status.message
+      name: Message
+      priority: 1
+      type: string
+    - description: The status reason
+      jsonPath: .status.status.reason
+      name: Reason
+      priority: 1
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:

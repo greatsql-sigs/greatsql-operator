@@ -70,26 +70,22 @@ type GroupReplicationClusterReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 
 func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("Reconciling GroupReplicationCluster", req.NamespacedName)
+	r.Log.Info("Reconciling GroupReplicationCluster", "namespace", req.Namespace, "name", req.Name)
 
 	mgr := &v1alpha1.GroupReplicationCluster{}
 	if err := r.Get(ctx, req.NamespacedName, mgr); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Resource deleted, skip", req.NamespacedName)
+			r.Log.Info("Resource deleted, skip", "namespace", req.Namespace, "name", req.Name)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
-	// 初始化状态机
+	// init state machine
 	stateMachine := state.NewStateMachine(&mgr.Status.Status)
 
-	// if err := mgr.Spec.ValidateClusterSpec(); err != nil {
-	// 	return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "InvalidSpec", err.Error(), err)
-	// }
-
 	if err := r.handleFinalizer(ctx, mgr); err != nil {
-		return ctrl.Result{}, r.transitionWithError(stateMachine, v1alpha1.PhaseError, "FinalizerError", err.Error(), err)
+		return ctrl.Result{}, r.transitionWithError(ctx, mgr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonFinalizerError, err.Error(), err)
 	}
 
 	// If the object is being deleted, stop reconciliation
@@ -104,6 +100,8 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	sts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, req.NamespacedName, sts); err != nil {
 		if err := r.createBaseResources(ctx, req, mgr); err != nil {
+			// 即使创建资源失败，也要尝试更新状态
+			_, _ = r.computeStatus(ctx, mgr)
 			return ctrl.Result{}, err
 		}
 	}
@@ -111,14 +109,16 @@ func (r *GroupReplicationClusterReconciler) Reconcile(ctx context.Context, req c
 	// 计算并更新状态
 	if _, err := r.computeStatus(ctx, mgr); err != nil {
 		r.Log.Error(err, "Failed to compute status")
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 // transitionWithError 状态转换错误处理
 func (r *GroupReplicationClusterReconciler) transitionWithError(
+	ctx context.Context,
+	cr *v1alpha1.GroupReplicationCluster,
 	stateMachine *state.StateMachine,
 	phase v1alpha1.Phase,
 	reason, message string,
@@ -127,6 +127,19 @@ func (r *GroupReplicationClusterReconciler) transitionWithError(
 	stateMachine.SetStatusMessage(message)
 	stateMachine.SetStatusReason(reason)
 	_ = stateMachine.Transition(phase)
+
+	// 使用 updateStatusWithRetry 处理冲突
+	namespacedName := types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}
+	newStatus := *stateMachine.GetStatus()
+	updateErr := r.updateStatusWithRetry(ctx, namespacedName, func(latest *v1alpha1.GroupReplicationCluster) error {
+		latest.Status.Status = newStatus
+		return nil
+	})
+
+	if updateErr != nil {
+		r.Log.Error(updateErr, "Failed to update status during error handling")
+	}
+
 	return err
 }
 
@@ -136,21 +149,46 @@ func (r *GroupReplicationClusterReconciler) createBaseResources(
 ) error {
 	stateMachine := state.NewStateMachine(&cr.Status.Status)
 	_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+	stateMachine.SetStatusMessage(consts.StatusMessageInitializingResources)
+	stateMachine.SetStatusReason(consts.StatusReasonCreatingResources)
 
-	// 创建 Secret
-	secret, err := kube.NewSecretEnv(
-		cr, r.Scheme, req.Name+"-secret", req.Namespace,
-	)
-	if err != nil {
-		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
+	// 立即更新状态，让用户知道集群正在初始化
+	namespacedName := types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}
+	newStatus := *stateMachine.GetStatus()
+	if err := r.updateStatusWithRetry(ctx, namespacedName, func(latest *v1alpha1.GroupReplicationCluster) error {
+		latest.Status.Status = newStatus
+		return nil
+	}); err != nil {
+		r.Log.Error(err, "Failed to update status")
+		// 不返回错误，继续创建资源
 	}
-	if err = r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, secret); err != nil {
-		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateSecretError", err.Error(), err)
+
+	// 检查是否需要创建 Secret（如果用户没有通过 env 挂载自己的 Secret）
+	defaultSecretName := req.Name + "-secret"
+	secretName, needCreateSecret := kube.DetectUserSecret(
+		cr.Spec.Container.Envs,
+		defaultSecretName,
+		consts.MYSQL_ROOT_PASSWORD_KEY,
+	)
+
+	if !needCreateSecret {
+		r.Log.Info("Using user-provided secret", "secretName", secretName)
+	}
+
+	// 只在用户没有提供 Secret 时才自动创建
+	if needCreateSecret {
+		r.Log.Info("No user-provided secret found, creating default secret", "secretName", secretName)
+		secret, err := kube.NewSecretEnv(cr, r.Scheme, secretName, req.Namespace, true)
+		if err != nil {
+			return r.transitionWithError(ctx, cr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateSecretError, err.Error(), err)
+		}
+		if err = r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, secret); err != nil {
+			return r.transitionWithError(ctx, cr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateSecretError, err.Error(), err)
+		}
 	}
 
 	// 创建 Service
-	err = r.createService(ctx, req, cr, stateMachine)
-	if err != nil {
+	if err := r.createService(ctx, req, cr, stateMachine); err != nil {
 		return err
 	}
 
@@ -162,7 +200,7 @@ func (r *GroupReplicationClusterReconciler) createBaseResources(
 		return r.createMultiplePrimaryModeResources(ctx, req, cr)
 	}
 	return r.transitionWithError(
-		stateMachine, v1alpha1.PhaseError, "UnsupportedMode",
+		ctx, cr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonUnsupportedMode,
 		"unsupported cluster mode", fmt.Errorf("unsupported cluster mode: %s", cr.Spec.Mode),
 	)
 }
@@ -174,15 +212,19 @@ func (r *GroupReplicationClusterReconciler) createService(
 	svcSpec := cr.Spec.Service
 	baseService, err := network.BuildServices(cr, *svcSpec)
 	if err != nil {
-		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
+		return r.transitionWithError(ctx, cr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateServiceError, err.Error(), err)
 	}
 
 	// 创建 headless service
 	headlessService := baseService.DeepCopy()
 	headlessService.Name = fmt.Sprintf("%s-headless", req.Name)
+	headlessService.Spec.Type = corev1.ServiceTypeClusterIP
 	headlessService.Spec.ClusterIP = corev1.ClusterIPNone
+	// ClusterIP 类型不支持这些字段，需要清除
+	headlessService.Spec.ExternalTrafficPolicy = ""
+	headlessService.Spec.LoadBalancerClass = nil
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, headlessService); err != nil {
-		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
+		return r.transitionWithError(ctx, cr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateServiceError, err.Error(), err)
 	}
 
 	// 创建普通的 service
@@ -190,7 +232,7 @@ func (r *GroupReplicationClusterReconciler) createService(
 	service.Name = req.Name
 	service.Spec.Type = cr.Spec.Service.Type
 	if err := r.ResourceHelper.CreateOrUpdateWithOwner(ctx, cr, service); err != nil {
-		return r.transitionWithError(stateMachine, v1alpha1.PhaseError, "CreateServiceError", err.Error(), err)
+		return r.transitionWithError(ctx, cr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateServiceError, err.Error(), err)
 	}
 
 	return nil
@@ -206,36 +248,97 @@ func (r *GroupReplicationClusterReconciler) handleFinalizer(ctx context.Context,
 		r.Client,
 		cr,
 		log, func(ctx context.Context, obj *v1alpha1.GroupReplicationCluster) error {
-			// 删除 Secret
-			secret := &corev1.Secret{}
-			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, secret); err != nil {
-				log.Error(err, "Failed to delete Secret")
-				return err
+			stsList := &appsv1.StatefulSetList{}
+			if err := r.List(ctx, stsList, client.InNamespace(obj.Namespace), client.MatchingLabels{
+				"app.kubernetes.io/instance": obj.Name,
+			}); err == nil {
+				for _, sts := range stsList.Items {
+					log.Info("Deleting StatefulSet", "name", sts.Name)
+					sts.OwnerReferences = nil
+					if err := r.Update(ctx, &sts); err != nil {
+						log.Error(err, "Failed to remove ownerReference from StatefulSet", "name", sts.Name)
+					}
+					if err := r.Delete(ctx, &sts); err != nil && !errors.IsNotFound(err) {
+						log.Error(err, "Failed to delete StatefulSet", "name", sts.Name)
+						return err
+					}
+				}
 			}
 
-			// 删除 Service
-			svc := &corev1.Service{}
-			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, svc); err != nil {
-				log.Error(err, "Failed to delete Service")
-				return err
-			}
-
-			// 删除sts
+			// 删除 StatefulSet（先删除 StatefulSet，避免重新创建 Pod）
 			sts := &appsv1.StatefulSet{}
-			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, sts); err != nil {
-				log.Error(err, "Failed to delete StatefulSet")
-				return err
+			stsName := obj.Name
+			if err := r.ResourceHelper.DeleteResource(ctx, stsName, obj.Namespace, sts); err != nil {
+				if !errors.IsNotFound(err) {
+					log.Error(err, "Failed to delete StatefulSet", "name", stsName)
+					return err
+				}
+			}
+			log.Info("StatefulSet deleted", "name", stsName)
+
+			// 删除所有 ConfigMap（每个副本一个）
+			totalMembers := obj.Spec.GetTotalMembers()
+			for i := 0; i < int(totalMembers); i++ {
+				cmName := fmt.Sprintf("%s-config-%d", obj.Name, i)
+				cm := &corev1.ConfigMap{}
+				if err := r.ResourceHelper.DeleteResource(ctx, cmName, obj.Namespace, cm); err != nil {
+					if !errors.IsNotFound(err) {
+						log.Error(err, "Failed to delete ConfigMap", "name", cmName)
+						return err
+					}
+				}
+				log.Info("ConfigMap deleted", "name", cmName)
 			}
 
-			// 删除 ConfigMap
-			cm := &corev1.ConfigMap{}
-			if err := r.ResourceHelper.DeleteResource(ctx, obj.Name, obj.Namespace, cm); err != nil {
-				log.Error(err, "Failed to delete ConfigMap")
-				return err
+			// 删除 Headless Service
+			headlessSvcName := fmt.Sprintf("%s-headless", obj.Name)
+			headlessSvc := &corev1.Service{}
+			if err := r.ResourceHelper.DeleteResource(ctx, headlessSvcName, obj.Namespace, headlessSvc); err != nil {
+				if !errors.IsNotFound(err) {
+					log.Error(err, "Failed to delete headless Service", "name", headlessSvcName)
+					return err
+				}
+			}
+			log.Info("Headless Service deleted", "name", headlessSvcName)
+
+			// 删除普通 Service
+			svcName := obj.Name
+			svc := &corev1.Service{}
+			if err := r.ResourceHelper.DeleteResource(ctx, svcName, obj.Namespace, svc); err != nil {
+				if !errors.IsNotFound(err) {
+					log.Error(err, "Failed to delete Service", "name", svcName)
+					return err
+				}
+			}
+			log.Info("Service deleted", "name", svcName)
+
+			// 删除 Secret
+			secretName := fmt.Sprintf("%s-secret", obj.Name)
+			secret := &corev1.Secret{}
+			if err := r.ResourceHelper.DeleteResource(ctx, secretName, obj.Namespace, secret); err != nil {
+				if !errors.IsNotFound(err) {
+					log.Error(err, "Failed to delete Secret", "name", secretName)
+					return err
+				}
+			}
+			log.Info("Secret deleted", "name", secretName)
+
+			// 删除 PVC
+			for i := 0; i < int(totalMembers); i++ {
+				pvcName := fmt.Sprintf("data-%s-%d", obj.Name, i)
+				pvc := &corev1.PersistentVolumeClaim{}
+				if err := r.ResourceHelper.DeleteResource(ctx, pvcName, obj.Namespace, pvc); err != nil {
+					if !errors.IsNotFound(err) {
+						log.Error(err, "Failed to delete PVC", "name", pvcName)
+						// PVC 删除失败不阻塞整个清理过程，记录错误继续
+						log.Info("Continuing cleanup despite PVC deletion failure", "name", pvcName)
+					}
+				} else {
+					log.Info("PVC deleted", "name", pvcName)
+				}
 			}
 
-			// TODO: 删除 PVC?
-
+			log.Info("All resources cleaned up successfully")
 			return nil
 		})
 }
@@ -245,21 +348,33 @@ func (r *GroupReplicationClusterReconciler) createSinglePrimaryModeResources(ctx
 	req ctrl.Request,
 	mgr *v1alpha1.GroupReplicationCluster,
 ) error {
-	steps := []struct {
-		name string
-		fn   func() error
-	}{
-		{"create ConfigMap", func() error { return r.createConfigMap(ctx, req, mgr, 0) }},
-		{"create StatefulSet", func() error { return r.createStatefulSet(ctx, req, mgr, 0) }},
-		{"wait Pod ready", func() error { return r.waitForPodsReady(ctx, req) }},
-		{"init cluster", func() error { return r.initializeSingleMasterCluster(mgr) }},
+	totalMembers := mgr.Spec.GetTotalMembers()
+	stateMachine := state.NewStateMachine(&mgr.Status.Status)
+
+	// 为每个成员创建独立的 ConfigMap
+	for i := 0; i < int(totalMembers); i++ {
+		if err := r.createConfigMap(ctx, req, mgr, i); err != nil {
+			return r.transitionWithError(ctx, mgr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateConfigMapError, err.Error(), err)
+		}
+		cmName := fmt.Sprintf("%s-config-%d", req.Name, i)
+		if err := r.waitForConfigMap(ctx, req.Namespace, cmName, 10*time.Second); err != nil {
+			return r.transitionWithError(ctx, mgr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonWaitForConfigMapError, err.Error(), err)
+		}
 	}
 
-	stateMachine := state.NewStateMachine(&mgr.Status.Status)
-	for _, step := range steps {
-		if err := step.fn(); err != nil {
-			return r.transitionWithError(stateMachine, v1alpha1.PhaseError, step.name+"Error", err.Error(), err)
-		}
+	// 创建单个 StatefulSet，replicas 为 totalMembers
+	if err := r.createStatefulSet(ctx, req, mgr, 0); err != nil {
+		return r.transitionWithError(ctx, mgr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonCreateStatefulSetError, err.Error(), err)
+	}
+
+	// 等待所有 Pod 就绪
+	if err := r.waitForPodsReady(ctx, req); err != nil {
+		return r.transitionWithError(ctx, mgr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonWaitPodReadyError, err.Error(), err)
+	}
+
+	// 初始化集群
+	if err := r.initializeSingleMasterCluster(mgr); err != nil {
+		return r.transitionWithError(ctx, mgr, stateMachine, v1alpha1.PhaseError, consts.StatusReasonInitClusterError, err.Error(), err)
 	}
 
 	_ = stateMachine.Transition(v1alpha1.PhaseReady)
@@ -299,12 +414,21 @@ func (r *GroupReplicationClusterReconciler) waitForPodsReady(ctx context.Context
 		return fmt.Errorf("failed to get pods: %v", err)
 	}
 
+	// 检查是否所有 Pod 都就绪
+	notReadyPods := []string{}
 	for _, pod := range pods {
 		if !workload.IsPodReady(&pod) {
-			return fmt.Errorf("pod %s is not ready", pod.Name)
+			notReadyPods = append(notReadyPods, pod.Name)
 		}
 	}
 
+	// 如果有未就绪的 Pod，返回错误让 controller 重试
+	if len(notReadyPods) > 0 {
+		r.Log.Info("Waiting for pods to be ready", "notReadyPods", notReadyPods)
+		return fmt.Errorf("waiting for pods to be ready: %v", notReadyPods)
+	}
+
+	r.Log.Info("All pods are ready", "count", len(pods))
 	return nil
 }
 
@@ -327,6 +451,8 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(
 		r.Log.Error(err, "Unable to fetch ConfigMap")
 		return err
 	}
+
+	r.Log.Info("Creating ConfigMap", "Name", configMapName)
 
 	groupSeeds := []string{
 		fmt.Sprintf(
@@ -371,6 +497,20 @@ func (r *GroupReplicationClusterReconciler) createConfigMap(
 	return r.ResourceHelper.CreateOrUpdateWithOwner(ctx, mgr, configMap)
 }
 
+func (r *GroupReplicationClusterReconciler) waitForConfigMap(ctx context.Context, ns, name string, timeout time.Duration) error {
+	t := time.Now()
+	for {
+		cm := &corev1.ConfigMap{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, cm); err == nil {
+			return nil
+		}
+		if time.Since(t) > timeout {
+			return fmt.Errorf("timeout waiting for ConfigMap %s", name)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 // createStatefulSet creates a StatefulSet for each member of the GroupReplicationCluster
 func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Context,
 	req ctrl.Request,
@@ -383,12 +523,21 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 	}
 
 	configMapName := fmt.Sprintf("%s-config-%d", req.Name, ordinal)
+
+	// 确认 ConfigMap 存在后再创建 StatefulSet
+	cm := &corev1.ConfigMap{}
+	if err := r.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: req.Namespace}, cm); err != nil {
+		r.Log.Error(err, "ConfigMap not found, cannot create StatefulSet", "ConfigMap", configMapName)
+		return fmt.Errorf("configMap %s not found: %w", configMapName, err)
+	}
+	r.Log.Info("ConfigMap verified", "Name", configMapName)
 	totalMembers := cr.Spec.GetTotalMembers()
 	sts, err := workload.BuildStatefulSet(*cr.Spec.Pod, &totalMembers, req.Name, req.Namespace, configMapName)
 	if err != nil {
 		r.Log.Error(err, "Could not create statefulSet")
 		return err
 	}
+	sts.Spec.ServiceName = fmt.Sprintf("%s-headless", req.Name)
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
 		corev1.ContainerPort{
 			Name:          "mysqlx",
@@ -409,11 +558,26 @@ func (r *GroupReplicationClusterReconciler) createStatefulSet(ctx context.Contex
 
 // initializeSingleMasterCluster 初始化单节点集群
 func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v1alpha1.GroupReplicationCluster) error {
+	ctx := context.Background()
+	secretName := r.getSecretName(mgr)
+
+	// 从 Secret 读取 root 密码
+	rootPassword, err := kube.GetPasswordFromSecret(ctx, r.Client, secretName, mgr.Namespace, consts.MYSQL_ROOT_PASSWORD_KEY)
+	if err != nil {
+		return err
+	}
+
+	// 从 Secret 读取复制用户密码
+	replPassword, err := kube.GetPasswordFromSecret(ctx, r.Client, secretName, mgr.Namespace, consts.REPLCATION_CHANNEL_PASSWORD_KEY)
+	if err != nil {
+		return err
+	}
+
 	mySQL := mysql.MySQL{
 		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace),
 		Port:     consts.MySQLPort,
 		UserName: consts.RootUser,
-		Password: consts.MYSQL_ROOT_PASSWORD_KEY,
+		Password: rootPassword,
 		DB:       consts.MySQLDB,
 	}
 
@@ -423,7 +587,7 @@ func (r *GroupReplicationClusterReconciler) initializeSingleMasterCluster(mgr *v
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mySQL.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
+			return mySQL.CreateUser(consts.REPLCATION_CHANNEL_USER, replPassword)
 		}},
 		{"grant privileges", func() error { return mySQL.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
 		{"start group replication", func() error { return kube.Retry(mySQL.StartGroupReplication, 3, 10*time.Second) }},
@@ -477,12 +641,20 @@ func (r *GroupReplicationClusterReconciler) bootstrapPrimaryNode(mgr *v1alpha1.G
 	r.Log.Info("Bootstrapping primary node...")
 	r.EventRecorder.Event(mgr, "Normal", "Bootstrap", "Bootstrapping the cluster with the first node")
 
+	// 从 Secret 读取复制用户密码
+	ctx := context.Background()
+	secretName := r.getSecretName(mgr)
+	replPassword, err := kube.GetPasswordFromSecret(ctx, r.Client, secretName, mgr.Namespace, consts.REPLCATION_CHANNEL_PASSWORD_KEY)
+	if err != nil {
+		return err
+	}
+
 	steps := []struct {
 		name string
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
+			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, replPassword)
 		}},
 		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
 		{"set bootstrap node", mysql.SetBootstrapNode},
@@ -507,13 +679,21 @@ func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.Grou
 ) error {
 	r.Log.Info("Adding new node as secondary", "Node", ordinal)
 
+	// 从 Secret 读取复制用户密码
+	ctx := context.Background()
+	secretName := r.getSecretName(mgr)
+	replPassword, err := kube.GetPasswordFromSecret(ctx, r.Client, secretName, mgr.Namespace, consts.REPLCATION_CHANNEL_PASSWORD_KEY)
+	if err != nil {
+		return err
+	}
+
 	primaryHost := fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", mgr.Name, mgr.Name, mgr.Namespace)
 	steps := []struct {
 		name string
 		fn   func() error
 	}{
 		{"create replication user", func() error {
-			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, consts.REPLCATION_CHANNEL_PASSWORD)
+			return mysql.CreateUser(consts.REPLCATION_CHANNEL_USER, replPassword)
 		}},
 		{"grant privileges", func() error { return mysql.GrantPrivileges(consts.REPLCATION_CHANNEL_USER) }},
 		{"wait for primary", func() error { return mysql.WaitForPrimaryAvailable(primaryHost, 300) }},
@@ -531,8 +711,20 @@ func (r *GroupReplicationClusterReconciler) joinSecondaryNode(mgr *v1alpha1.Grou
 	return nil
 }
 
+// getSecretName 获取 Secret 名称（优先使用用户提供的，否则使用默认生成的）
+func (r *GroupReplicationClusterReconciler) getSecretName(cr *v1alpha1.GroupReplicationCluster) string {
+	defaultSecretName := fmt.Sprintf("%s-secret", cr.Name)
+	secretName, _ := kube.DetectUserSecret(
+		cr.Spec.Container.Envs,
+		defaultSecretName,
+		consts.MYSQL_ROOT_PASSWORD_KEY,
+	)
+	return secretName
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *GroupReplicationClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.ResourceHelper = kube.NewResourceHelper(mgr, r.Log)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.GroupReplicationCluster{}).
 		Owns(&appsv1.StatefulSet{}).
@@ -548,7 +740,7 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context,
 		return nil, nil
 	}
 
-	// 初始化状态结果
+	// init state result
 	result := &v1alpha1.GroupReplicationClusterStatus{
 		Status: v1alpha1.Status{
 			Phase: v1alpha1.PhaseInitializing, // 默认状态
@@ -557,87 +749,105 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context,
 
 	stateMachine := state.NewStateMachine(&result.Status)
 
-	// 获取所有Pod
+	// get all pods
 	podList := &corev1.PodList{}
 	err := r.List(ctx, podList, client.InNamespace(cr.Namespace), client.MatchingLabels{consts.AppKubernetesName: cr.Name})
 	if err != nil {
 		return nil, err
 	}
 
-	// 获取MySQL连接信息
-	mySQL := mysql.MySQL{
-		Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", cr.Name, cr.Name, cr.Namespace),
-		Port:     consts.MySQLPort,
-		UserName: consts.RootUser,
-		Password: consts.MYSQL_ROOT_PASSWORD_KEY,
-		DB:       consts.MySQLDB,
-	}
-
-	// 检查集群状态
-	isClusterExist, err := mySQL.IsMGRClusterExist()
-	if err != nil {
-		r.Log.Error(err, "Failed to check cluster existence")
-		return nil, err
-	}
-
-	// 根据Pod数量和集群状态更新role
+	// update role based on pod count and cluster status
 	switch {
 	case len(podList.Items) == 0:
 		r.Log.Info("no pods found")
 		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-		stateMachine.SetStatusMessage("Waiting for pods to be created")
-		stateMachine.SetStatusReason("NotFound")
+		stateMachine.SetStatusMessage(consts.StatusMessageWaitingForPodsToCreate)
+		stateMachine.SetStatusReason(consts.StatusReasonNotFound)
 		stateMachine.SetReady(0)
-		result.Status.Role = v1alpha1.SecondaryRole // 默认角色
-
-	case !isClusterExist:
-		r.Log.Info("cluster not initialized")
-		_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-		stateMachine.SetStatusMessage("Cluster not initialized")
-		stateMachine.SetStatusReason("NotInitialized")
-		stateMachine.SetReady(0)
-		result.Status.Role = v1alpha1.SecondaryRole
+		result.Status.Role = v1alpha1.SecondaryRole // default role
 
 	default:
-		// 获取当前节点的角色
-		memberState, err := mySQL.GetMemberState()
+		// 只有在 Pod 存在时才尝试连接数据库
+		// 从 Secret 读取 root 密码
+		secretName := r.getSecretName(cr)
+		rootPassword, err := kube.GetPasswordFromSecret(ctx, r.Client, secretName, cr.Namespace, consts.MYSQL_ROOT_PASSWORD_KEY)
 		if err != nil {
-			r.Log.Error(err, "Failed to get member state")
-			return nil, err
-		}
-
-		// 根据memberState设置角色
-		switch memberState {
-		case "ONLINE":
-			// 检查是否是主节点
-			isPrimary, err := mySQL.IsPrimary()
-			if err != nil {
-				r.Log.Error(err, "Failed to check if primary")
-				return nil, err
-			}
-			if isPrimary {
-				result.Status.Role = v1alpha1.PrimaryRole
-			} else {
-				result.Status.Role = v1alpha1.SecondaryRole
-			}
-			_ = stateMachine.Transition(v1alpha1.PhaseReady)
-			stateMachine.SetStatusMessage("Cluster is healthy")
-			stateMachine.SetStatusReason("Healthy")
-			stateMachine.SetReady(int32(len(podList.Items)))
-
-		case "RECOVERING":
-			result.Status.Role = v1alpha1.SecondaryRole
+			r.Log.Info("Failed to get root password from secret, cluster may be initializing", "error", err.Error())
 			_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
-			stateMachine.SetStatusMessage("Node is recovering")
-			stateMachine.SetStatusReason("Recovering")
+			stateMachine.SetStatusMessage(consts.StatusMessageWaitingForPods)
+			stateMachine.SetStatusReason(consts.StatusReasonStartingDatabase)
 			stateMachine.SetReady(0)
-
-		default:
 			result.Status.Role = v1alpha1.SecondaryRole
-			_ = stateMachine.Transition(v1alpha1.PhaseError)
-			stateMachine.SetStatusMessage(fmt.Sprintf("Unexpected member state: %s", memberState))
-			stateMachine.SetStatusReason("InvalidState")
-			stateMachine.SetReady(0)
+		} else {
+			// get MySQL connection information
+			mySQL := mysql.MySQL{
+				Host:     fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local", cr.Name, cr.Name, cr.Namespace),
+				Port:     consts.MySQLPort,
+				UserName: consts.RootUser,
+				Password: rootPassword,
+				DB:       consts.MySQLDB,
+			}
+
+			// check cluster status
+			isClusterExist, err := mySQL.IsMGRClusterExist()
+			if err != nil {
+				// 如果无法连接数据库（例如 DNS 解析失败），说明集群还在初始化中
+				r.Log.Info("Cannot connect to database, cluster may be initializing", "error", err.Error())
+				_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+				stateMachine.SetStatusMessage(consts.StatusMessageWaitingForPods)
+				stateMachine.SetStatusReason(consts.StatusReasonStartingDatabase)
+				stateMachine.SetReady(0)
+				result.Status.Role = v1alpha1.SecondaryRole
+				// 不在这里更新，让最后统一更新
+			} else if !isClusterExist {
+				r.Log.Info("cluster not initialized")
+				_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+				stateMachine.SetStatusMessage(consts.StatusMessageInitializingCluster)
+				stateMachine.SetStatusReason(consts.StatusReasonInitializing)
+				stateMachine.SetReady(0)
+				result.Status.Role = v1alpha1.SecondaryRole
+			} else {
+				// 获取当前节点的角色
+				memberState, err := mySQL.GetMemberState()
+				if err != nil {
+					r.Log.Error(err, "Failed to get member state")
+					return nil, err
+				}
+
+				// 根据memberState设置角色
+				switch memberState {
+				case consts.MemberStateONLINE:
+					// 检查是否是主节点
+					isPrimary, err := mySQL.IsPrimary()
+					if err != nil {
+						r.Log.Error(err, "Failed to check if primary")
+						return nil, err
+					}
+					if isPrimary {
+						result.Status.Role = v1alpha1.PrimaryRole
+					} else {
+						result.Status.Role = v1alpha1.SecondaryRole
+					}
+					_ = stateMachine.Transition(v1alpha1.PhaseReady)
+					stateMachine.SetStatusMessage(consts.StatusMessageClusterHealthy)
+					stateMachine.SetStatusReason(consts.StatusReasonHealthy)
+					stateMachine.SetReady(int32(len(podList.Items)))
+
+				case consts.MemberStateRECOVERING:
+					result.Status.Role = v1alpha1.SecondaryRole
+					_ = stateMachine.Transition(v1alpha1.PhaseInitializing)
+					stateMachine.SetStatusMessage(consts.StatusMessageRecoveringNode)
+					stateMachine.SetStatusReason(consts.StatusReasonRecoveringData)
+					stateMachine.SetReady(0)
+
+				default:
+					result.Status.Role = v1alpha1.SecondaryRole
+					_ = stateMachine.Transition(v1alpha1.PhaseError)
+					stateMachine.SetStatusMessage(fmt.Sprintf("Unexpected member state: %s", memberState))
+					stateMachine.SetStatusReason(consts.StatusReasonUnknown)
+					stateMachine.SetReady(0)
+				}
+			}
 		}
 	}
 
@@ -646,23 +856,67 @@ func (r *GroupReplicationClusterReconciler) computeStatus(ctx context.Context,
 	result.Status = newStatus
 
 	if !reflect.DeepEqual(cr.Status, *result) {
-		cr.Status = *result
-		r.EventRecorder.Event(
-			cr,
-			"Normal",
-			"StatusUpdated",
-			fmt.Sprintf(
-				"GreatSQL status updated: %s, role: %s",
-				result.Status.Phase,
-				result.Status.Role,
-			),
-		)
-		if err := r.Client.Status().Update(ctx, cr); err != nil {
-			r.Log.Error(err, "Could not update status")
-			return result, err
+		// 使用 updateStatusWithRetry 处理冲突
+		namespacedName := types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}
+		updateErr := r.updateStatusWithRetry(ctx, namespacedName, func(latest *v1alpha1.GroupReplicationCluster) error {
+			latest.Status = *result
+			r.EventRecorder.Event(
+				latest,
+				"Normal",
+				"StatusUpdated",
+				fmt.Sprintf(
+					"GreatSQL status updated: %s, role: %s",
+					result.Status.Phase,
+					result.Status.Role,
+				),
+			)
+			return nil
+		})
+
+		if updateErr != nil {
+			r.Log.Error(updateErr, "Could not update status")
+			return result, updateErr
 		}
 	}
 
 	r.Log.Info("Status updated", "status", result)
 	return result, nil
+}
+
+// updateStatusWithRetry 更新状态并处理冲突重试
+func (r *GroupReplicationClusterReconciler) updateStatusWithRetry(
+	ctx context.Context,
+	namespacedName types.NamespacedName,
+	updateFn func(*v1alpha1.GroupReplicationCluster) error,
+) error {
+	// 最多重试 3 次
+	maxRetries := 3
+	for i := range maxRetries {
+		// 获取最新版本的资源
+		cr := &v1alpha1.GroupReplicationCluster{}
+		if err := r.Get(ctx, namespacedName, cr); err != nil {
+			return err
+		}
+
+		// 应用更新
+		if err := updateFn(cr); err != nil {
+			return err
+		}
+
+		// 尝试更新
+		if err := r.Client.Status().Update(ctx, cr); err != nil {
+			if errors.IsConflict(err) && i < maxRetries-1 {
+				// 如果是冲突错误且还有重试次数，等待一小段时间后重试
+				r.Log.Info("Status update conflict, retrying...", "attempt", i+1)
+				time.Sleep(time.Millisecond * 100)
+				continue
+			}
+			return err
+		}
+
+		// 更新成功
+		return nil
+	}
+
+	return fmt.Errorf("failed to update status after %d retries", maxRetries)
 }

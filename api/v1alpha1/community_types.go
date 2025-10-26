@@ -127,6 +127,14 @@ type RollingUpdate struct {
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
+// MemberStatus 成员状态
+type MemberStatus struct {
+	Name  string     `json:"name,omitempty"`  // 成员名称，如 greatsql-mgr-0
+	Role  MemberRole `json:"role,omitempty"`  // 成员角色
+	State string     `json:"state,omitempty"` // 成员状态，如 ONLINE, RECOVERING, OFFLINE
+	Ready bool       `json:"ready,omitempty"` // 是否就绪
+}
+
 // Status 状态
 type Status struct {
 	Role    MemberRole `json:"role,omitempty"`

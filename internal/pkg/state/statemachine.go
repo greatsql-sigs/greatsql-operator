@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 )
 
 // StateMachine 状态机结构
@@ -56,17 +57,17 @@ func (sm *StateMachine) Transition(newPhase v1alpha1.Phase) error {
 	switch newPhase {
 	case v1alpha1.PhaseError:
 		if sm.status.Message == "" {
-			sm.status.Message = "system error"
+			sm.status.Message = consts.StatusMessageSystemError
 		}
 		if sm.status.Reason == "" {
-			sm.status.Reason = "unknown error"
+			sm.status.Reason = consts.StatusReasonUnknownError
 		}
 	case v1alpha1.PhasePaused:
 		if sm.status.Message == "" {
-			sm.status.Message = "system paused"
+			sm.status.Message = consts.StatusMessageSystemPaused
 		}
 		if sm.status.Reason == "" {
-			sm.status.Reason = "manual paused"
+			sm.status.Reason = consts.StatusReasonManualPaused
 		}
 	}
 
