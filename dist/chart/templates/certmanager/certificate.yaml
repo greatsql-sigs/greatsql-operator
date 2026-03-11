@@ -27,7 +27,7 @@ spec:
   dnsNames:
     - greatsql-operator.{{ .Release.Namespace }}.svc
     - greatsql-operator.{{ .Release.Namespace }}.svc.cluster.local
-    - greatsql-operator-metrics-service.{{ .Release.Namespace }}.svc
+    - greatsql-operator-controller-manager-metrics-service.{{ .Release.Namespace }}.svc
   issuerRef:
     kind: Issuer
     name: selfsigned-issuer

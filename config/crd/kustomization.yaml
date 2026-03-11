@@ -4,6 +4,12 @@
 resources:
 - bases/database.greatsql.cn_standalones.yaml
 - bases/database.greatsql.cn_groupreplicationclusters.yaml
+- bases/database.greatsql.cn.greatsql.cn_groupreplicationclusters.yaml
+- bases/database.greatsql.cn.greatsql.cn_standalones.yaml
+- bases/database.greatsql.cn_greatsqlbackups.yaml
+- bases/database.greatsql.cn_greatsqlrestores.yaml
+- bases/database.greatsql.cn_schedulingbackups.yaml
+- bases/database.greatsql.cn_restores.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 # patches: 

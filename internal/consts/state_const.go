@@ -4,7 +4,7 @@ package consts
 const (
 	PhaseInitializing string = "initializing"
 	PhaseRunning      string = "running"
-	PhaseStoping      string = "stopping"
+	PhaseStopping     string = "stopping"
 	PhaseReady        string = "ready"
 	PhaseError        string = "error"
 	PhasePaused       string = "paused"
@@ -37,6 +37,7 @@ const (
 	StatusMessageBootstrappingCluster    string = "Bootstrapping cluster"
 	StatusMessageInitializingCluster     string = "Initializing cluster"
 	StatusMessageCreatingClusterResource string = "Creating cluster resources"
+	StatusMessageWaitingForConfigMap     string = "Waiting for ConfigMap"
 
 	// ready status message
 	StatusMessageAllPodsReady           string = "All pods are ready"
@@ -155,6 +156,9 @@ const (
 	StatusReasonCreateConfigMapError      string = "createConfigMapError"
 	StatusReasonWaitForConfigMapError     string = "waitForConfigMapError"
 	StatusReasonCreateStatefulSetError    string = "createStatefulSetError"
+	StatusReasonCreateResourcesError      string = "CreateResourcesError"
+	StatusReasonGetStatefulSetError       string = "GetStatefulSetError"
+	StatusReasonScaleStatefulSetError     string = "ScaleStatefulSetError"
 	StatusReasonWaitPodReadyError         string = "waitPodReadyError"
 	StatusReasonInitClusterError          string = "initClusterError"
 	StatusReasonUnsupportedMode           string = "UnsupportedMode"

@@ -2,14 +2,17 @@ package mysql
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 )
 
-// MySQL mysql
 type MySQL struct {
 	UserName string
 	Password string
@@ -18,317 +21,297 @@ type MySQL struct {
 	DB       string
 }
 
-// NewClient create a new mysql client
-func (m *MySQL) NewClient(username, password, host, db string, port int32) (*sql.DB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port, db)
+func (m *MySQL) dsn() string {
+	// 带上 3s 的读写超时，防止 Reconcile 堵住
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local&timeout=3s&readTimeout=3s&writeTimeout=3s",
+		m.UserName, m.Password, m.Host, m.Port, m.DB)
+}
 
-	dbConn, err := sql.Open("mysql", dsn)
+func (m *MySQL) NewClient() (*sql.DB, error) {
+	dbConn, err := sql.Open("mysql", m.dsn())
 	if err != nil {
 		return nil, err
 	}
-
 	if err := dbConn.Ping(); err != nil {
-		closeErr := dbConn.Close()
-		if closeErr != nil {
-			return nil, fmt.Errorf(
-				"error verifying connection with database: %v, additionally failed to close connection: %v", err, closeErr)
-		}
-		return nil, fmt.Errorf("error verifying connection with database: %v", err)
+		_ = dbConn.Close()
+		return nil, fmt.Errorf("failed to connect MySQL %s: %v", m.Host, err)
 	}
-
 	return dbConn, nil
 }
 
 func (m *MySQL) query(query string, args ...interface{}) error {
-	db, err := m.NewClient(m.UserName, m.Password, m.Host, m.DB, m.Port)
+	if len(args) > 0 {
+		log.Printf("[MySQL] %s: %s (args=%v)", m.Host, query, args)
+	} else {
+		log.Printf("[MySQL] %s: %s", m.Host, query)
+	}
+
+	db, err := m.NewClient()
 	if err != nil {
 		return err
 	}
-
-	defer func() {
-		if err := db.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
+	defer db.Close()
 
 	_, err = db.Exec(query, args...)
 	if err != nil {
-		return err
+		log.Printf("[MySQL] exec failed on %s: %v", m.Host, err)
 	}
-
-	return nil
+	return err
 }
 
-// rowsQuery query rows
-func (m *MySQL) rowsQuery(query string, args ...interface{}) (*sql.Rows, error) {
-	db, err := m.NewClient(m.UserName, m.Password, m.Host, m.DB, m.Port)
+func escapeSQLString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+// --- user & grant ---
+
+func (m *MySQL) isUserExist(username, host string) (bool, error) {
+	db, err := m.NewClient()
 	if err != nil {
-		return nil, err
+		return false, err
 	}
+	defer db.Close()
 
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, err
+	query := "SELECT 1 FROM mysql.user WHERE user = ? AND host = ? LIMIT 1;"
+	var exists int
+	err = db.QueryRow(query, username, host).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
 	}
-
-	return rows, nil
+	return exists == 1, err
 }
 
-// ModifyRootPassword modify root password
-func (m *MySQL) ModifyRootPassword(password string) error {
-	sql := "ALTER USER 'root'@'%' IDENTIFIED BY ?;"
-	return m.query(sql, password)
-}
-
-// CreateUser create user
 func (m *MySQL) CreateUser(username, password string) error {
-	exist, err := m.isUserExist(username)
+	if username == "" {
+		return fmt.Errorf("empty username")
+	}
+
+	exist, err := m.isUserExist(username, "%")
 	if err != nil {
 		return err
 	}
-
 	if exist {
+		log.Printf("[MySQL] user %s already exists on %s, skip", username, m.Host)
 		return nil
 	}
 
-	sql := "CREATE USER ?@'%' IDENTIFIED BY ?;"
-	return m.query(sql, username, password)
-}
-
-// isUserExist check user exist
-func (m *MySQL) isUserExist(username string) (bool, error) {
-	sql := "SELECT 1 FROM mysql.user WHERE user = ?;"
-	rows, err := m.rowsQuery(sql, username)
+	db, err := m.NewClient()
 	if err != nil {
-		return false, err
+		return err
 	}
+	defer db.Close()
 
-	defer func() {
-		if err := rows.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
+	account := fmt.Sprintf("'%s'@'%s'", escapeSQLString(username), "%")
+	escapedPassword := escapeSQLString(password)
+	stmt := fmt.Sprintf("CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s';", account, escapedPassword)
 
-	if rows.Next() {
-		return true, nil
+	log.Printf("[MySQL] creating user on %s: CREATE USER IF NOT EXISTS %s IDENTIFIED BY '***';", m.Host, account)
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("create user %s failed on %s: %w", username, m.Host, err)
 	}
-
-	return false, nil
+	return nil
 }
 
-// IsMGRClusterExist check cluster exist
-func (m *MySQL) IsMGRClusterExist() (bool, error) {
-	sql := "SELECT 1 FROM performance_schema.replication_group_members LIMIT 1;"
-	rows, err := m.rowsQuery(sql)
+func (m *MySQL) GrantPrivileges(username, password string) error {
+	db, err := m.NewClient()
 	if err != nil {
-		return false, err
+		return fmt.Errorf("grant: connect failed: %w", err)
+	}
+	defer db.Close()
+
+	account := fmt.Sprintf("'%s'@'%s'", escapeSQLString(username), "%")
+
+	if _, err := db.Exec("SET SESSION sql_log_bin=0;"); err != nil {
+		return fmt.Errorf("grant: disable binlog failed: %w", err)
 	}
 
-	defer func() {
-		if err := rows.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
-
-	if rows.Next() {
-		return true, nil
+	createSQL := fmt.Sprintf(
+		"CREATE USER IF NOT EXISTS %s IDENTIFIED WITH mysql_native_password BY '%s';",
+		account, escapeSQLString(password),
+	)
+	if _, err := db.Exec(createSQL); err != nil {
+		return fmt.Errorf("grant: create user failed: %w", err)
 	}
 
-	return false, nil
-}
-
-// GrantPrivileges grant privileges
-func (m *MySQL) GrantPrivileges(username string) error {
 	globalPrivileges := []string{
-		"RELOAD", "SHUTDOWN", "PROCESS", "FILE", "SELECT", "SUPER",
-		"REPLICATION SLAVE", "REPLICATION CLIENT", "REPLICATION_APPLIER",
+		"RELOAD", "PROCESS", "FILE", "SELECT", "SUPER",
+		"REPLICATION SLAVE", "REPLICATION REPLICA", "REPLICATION CLIENT", "REPLICATION_APPLIER",
 		"CREATE USER", "SYSTEM_VARIABLES_ADMIN", "PERSIST_RO_VARIABLES_ADMIN",
 		"BACKUP_ADMIN", "CLONE_ADMIN", "EXECUTE",
 	}
-
-	schemaPrivileges := map[string][]string{
-		"mysql_innodb_cluster_metadata.*": {
-			"ALTER", "ALTER ROUTINE", "CREATE", "CREATE ROUTINE", "CREATE TEMPORARY TABLES",
-			"CREATE VIEW", "DELETE", "DROP", "EVENT", "EXECUTE", "INDEX", "INSERT", "LOCK TABLES",
-			"REFERENCES", "SHOW VIEW", "TRIGGER", "UPDATE",
-		},
-		"mysql_innodb_cluster_metadata_bkp.*": {
-			"ALTER", "ALTER ROUTINE", "CREATE", "CREATE ROUTINE", "CREATE TEMPORARY TABLES",
-			"CREATE VIEW", "DELETE", "DROP", "EVENT", "EXECUTE", "INDEX", "INSERT", "LOCK TABLES",
-			"REFERENCES", "SHOW VIEW", "TRIGGER", "UPDATE",
-		},
-		"mysql_innodb_cluster_metadata_previous.*": {
-			"ALTER", "ALTER ROUTINE", "CREATE", "CREATE ROUTINE", "CREATE TEMPORARY TABLES",
-			"CREATE VIEW", "DELETE", "DROP", "EVENT", "EXECUTE", "INDEX", "INSERT", "LOCK TABLES",
-			"REFERENCES", "SHOW VIEW", "TRIGGER", "UPDATE",
-		},
-		"mysql.*": {"INSERT", "UPDATE", "DELETE"},
+	globalSQL := fmt.Sprintf("GRANT %s ON *.* TO %s;", strings.Join(globalPrivileges, ", "), account)
+	if _, err := db.Exec(globalSQL); err != nil {
+		return fmt.Errorf("grant: grant global failed: %w", err)
 	}
 
-	globalSQL := "GRANT " + strings.Join(globalPrivileges, ", ") + " ON *.* TO ?@'%';"
-	if err := m.query(globalSQL, username); err != nil {
-		return err
+	if _, err := db.Exec("SET SESSION sql_log_bin=1;"); err != nil {
+		return fmt.Errorf("grant: re-enable binlog failed: %w", err)
 	}
 
-	for schema, privileges := range schemaPrivileges {
-		schemaSQL := "GRANT " + strings.Join(privileges, ", ") + " ON " + schema + " TO ?@'%';"
-		if err := m.query(schemaSQL, username); err != nil {
-			return err
+	if _, err := db.Exec("FLUSH PRIVILEGES;"); err != nil {
+		return fmt.Errorf("grant: flush failed: %w", err)
+	}
+
+	log.Printf("[MySQL] granted replication privileges to %s on %s", username, m.Host)
+	return nil
+}
+
+// --- MGR helper ---
+
+func (m *MySQL) IsGroupReplicationPluginLoaded() (bool, error) {
+	db, err := m.NewClient()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	query := "SELECT COUNT(*) FROM information_schema.plugins WHERE PLUGIN_NAME = 'group_replication' AND PLUGIN_STATUS = 'ACTIVE';"
+	var count int
+	if err := db.QueryRow(query).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (m *MySQL) IsMGRClusterExist() (bool, error) {
+	db, err := m.NewClient()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	query := "SELECT COUNT(*) FROM performance_schema.replication_group_members;"
+	var count int
+	if err := db.QueryRow(query).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (m *MySQL) GetMemberState() (string, error) {
+	db, err := m.NewClient()
+	if err != nil {
+		return "", fmt.Errorf("GetMemberState: connect failed: %w", err)
+	}
+	defer db.Close()
+
+	query := `
+		SELECT MEMBER_STATE 
+		FROM performance_schema.replication_group_members
+		WHERE MEMBER_HOST = @@hostname OR MEMBER_HOST LIKE CONCAT(@@hostname, '%%')
+		LIMIT 1;
+	`
+	var state string
+	if err := db.QueryRow(query).Scan(&state); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("GetMemberState: no row for host %s", m.Host)
 		}
+		return "", fmt.Errorf("GetMemberState: query failed on %s: %w", m.Host, err)
 	}
-	return nil
+	return state, nil
 }
 
-// SetReplicationChannel set replication channel
-func (m *MySQL) SetReplicationChannel(user, password string) error {
-	sql := "CHANGE MASTER TO MASTER_USER = ?, MASTER_PASSWORD = ? FOR CHANNEL 'group_replication_recovery';"
-	if err := m.query(sql, user, password); err != nil {
+func (m *MySQL) IsPrimary() (bool, error) {
+	db, err := m.NewClient()
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	query := `SELECT MEMBER_ROLE FROM performance_schema.replication_group_members WHERE MEMBER_HOST = @@hostname OR MEMBER_HOST LIKE CONCAT(@@hostname, '%%') LIMIT 1;`
+	var role string
+	if err := db.QueryRow(query).Scan(&role); err != nil {
+		return false, err
+	}
+	return role == consts.ClusterRolePrimary, nil
+}
+
+// 配置恢复通道
+func (m *MySQL) ConfigureReplicationChannel(user, password string) error {
+	if err := m.query("SET SESSION sql_log_bin=0;"); err != nil {
 		return err
 	}
-
+	stmt := fmt.Sprintf(
+		"CHANGE MASTER TO MASTER_USER='%s', MASTER_PASSWORD='%s' FOR CHANNEL 'group_replication_recovery';",
+		escapeSQLString(user), escapeSQLString(password),
+	)
+	// 打日志不暴露密码
+	log.Printf("[MySQL] %s: CHANGE MASTER TO MASTER_USER='%s', MASTER_PASSWORD='***' FOR CHANNEL 'group_replication_recovery';", m.Host, user)
+	if err := m.query(stmt); err != nil {
+		return err
+	}
+	if err := m.query("SET SESSION sql_log_bin=1;"); err != nil {
+		return err
+	}
 	return nil
 }
 
-// StartGroupReplication start group replication
 func (m *MySQL) StartGroupReplication() error {
-	sql := "START GROUP_REPLICATION;"
-	return m.query(sql)
+	return m.query("START GROUP_REPLICATION;")
 }
 
-// SetBootstrapNode set bootstrap node
+func (m *MySQL) DisableSuperReadOnly() error {
+	return m.query("SET GLOBAL super_read_only = OFF;")
+}
+
 func (m *MySQL) SetBootstrapNode() error {
-	sql := "SET GLOBAL group_replication_bootstrap_group = ON;"
-	if err := m.query(sql); err != nil {
+	if err := m.query("SET GLOBAL group_replication_bootstrap_group = ON;"); err != nil {
 		return err
 	}
-
-	sql = "START GROUP_REPLICATION;"
-	return m.query(sql)
+	return m.query("START GROUP_REPLICATION;")
 }
 
-// WaitForMemberState waits for the current member to reach the desired state
-func (m *MySQL) WaitForMemberState(desiredState string, timeoutSeconds int) error {
-	for i := 0; i < timeoutSeconds; i++ {
-		state, err := m.getMemberState()
-		if err != nil {
-			return err
+func (m *MySQL) ResetBootstrapFlag() error {
+	return m.query("SET GLOBAL group_replication_bootstrap_group = OFF;")
+}
+
+// 返回指定成员的状态和角色
+func (m *MySQL) GetMemberStateAndRole(memberHost string) (string, string, error) {
+	if memberHost == "" {
+		return "", "", fmt.Errorf("empty memberHost")
+	}
+	db, err := m.NewClient()
+	if err != nil {
+		return "", "", err
+	}
+	defer db.Close()
+
+	query := `
+		SELECT MEMBER_STATE, MEMBER_ROLE
+		FROM performance_schema.replication_group_members
+		WHERE MEMBER_HOST = ? OR MEMBER_HOST LIKE CONCAT(?, '%%')
+		LIMIT 1;
+	`
+	var state, role string
+	if err := db.QueryRow(query, memberHost, memberHost).Scan(&state, &role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", fmt.Errorf("member %s not found", memberHost)
 		}
-		if state == desiredState {
+		return "", "", err
+	}
+	return state, role, nil
+}
+
+// WaitForPrimaryOnline 按秒等主节点起来
+func (m *MySQL) WaitForPrimaryOnline(memberHost string, timeoutSec int) error {
+	for i := 0; i < timeoutSec; i++ {
+		state, role, err := m.GetMemberStateAndRole(memberHost)
+		if err == nil && state == consts.MemberStateONLINE && role == consts.ClusterRolePrimary {
 			return nil
 		}
 		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("timeout waiting for member state %s", desiredState)
+	return fmt.Errorf("primary %s is not online after %d seconds", memberHost, timeoutSec)
 }
 
-// getMemberState gets the current member state in group replication
-func (m *MySQL) getMemberState() (string, error) {
-	query := `SELECT MEMBER_STATE FROM performance_schema.replication_group_members 
-			  WHERE MEMBER_HOST = @@hostname`
-	var state string
-	err := m.queryRow(query).Scan(&state)
-	return state, err
-}
-
-// ResetBootstrapFlag resets the bootstrap flag after successful primary start
-func (m *MySQL) ResetBootstrapFlag() error {
-	return m.query("SET GLOBAL group_replication_bootstrap_group = OFF")
-}
-
-// WaitForPrimaryAvailable waits for the primary node to be accessible
-func (m *MySQL) WaitForPrimaryAvailable(primaryHost string, timeoutSeconds int) error {
-	for i := 0; i < timeoutSeconds; i++ {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
-			m.UserName, m.Password, primaryHost, m.DB))
-		if err == nil {
-			if err = db.Ping(); err == nil {
-				err := db.Close()
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-			err := db.Close()
-			if err != nil {
-				return err
-			}
+// WaitForMemberOnline 按秒等成员起来
+func (m *MySQL) WaitForMemberOnline(memberHost string, timeoutSec int) error {
+	for i := 0; i < timeoutSec; i++ {
+		state, role, err := m.GetMemberStateAndRole(memberHost)
+		if err == nil && state == consts.MemberStateONLINE && role == consts.ClusterRoleSecondary {
+			return nil
 		}
 		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("timeout waiting for primary node to be available")
-}
-
-// queryRow executes a query that returns a single row
-func (m *MySQL) queryRow(query string, args ...interface{}) *sql.Row {
-	db, err := m.NewClient(m.UserName, m.Password, m.Host, m.DB, m.Port)
-	if err != nil {
-		return nil
-	}
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			fmt.Println("Error closing database connection:", err)
-		}
-	}(db)
-	return db.QueryRow(query, args...)
-}
-
-// IsPrimary 检查当前节点是否为主节点
-func (m *MySQL) IsPrimary() (bool, error) {
-	query := `SELECT MEMBER_ROLE FROM performance_schema.replication_group_members 
-			  WHERE MEMBER_HOST = @@hostname`
-	var role string
-	err := m.queryRow(query).Scan(&role)
-	if err != nil {
-		return false, err
-	}
-	return role == "PRIMARY", nil
-}
-
-// GetMemberState 获取当前节点的状态
-func (m *MySQL) GetMemberState() (string, error) {
-	query := `SELECT MEMBER_STATE FROM performance_schema.replication_group_members 
-			  WHERE MEMBER_HOST = @@hostname`
-	var state string
-	err := m.queryRow(query).Scan(&state)
-	return state, err
-}
-
-// MemberInfo 成员信息
-type MemberInfo struct {
-	MemberHost  string // 成员主机名
-	MemberRole  string // 成员角色: PRIMARY 或 SECONDARY
-	MemberState string // 成员状态: ONLINE, RECOVERING, OFFLINE, ERROR, UNREACHABLE
-}
-
-// GetAllMembers 获取所有成员的状态
-func (m *MySQL) GetAllMembers() ([]MemberInfo, error) {
-	query := `SELECT MEMBER_HOST, MEMBER_ROLE, MEMBER_STATE 
-			  FROM performance_schema.replication_group_members
-			  ORDER BY MEMBER_HOST`
-
-	rows, err := m.rowsQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			fmt.Println("Error closing rows:", err)
-		}
-	}()
-
-	var members []MemberInfo
-	for rows.Next() {
-		var member MemberInfo
-		if err := rows.Scan(&member.MemberHost, &member.MemberRole, &member.MemberState); err != nil {
-			return nil, err
-		}
-		members = append(members, member)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return members, nil
+	return fmt.Errorf("member %s is not online after %d seconds", memberHost, timeoutSec)
 }

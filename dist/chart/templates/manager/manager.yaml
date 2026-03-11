@@ -36,9 +36,9 @@ spec:
           image: {{ .Values.controllerManager.container.image.repository }}:{{ .Values.controllerManager.container.image.tag }}
           {{- if .Values.controllerManager.container.env }}
           env:
-            {{- range $key, $value := .Values.controllerManager.container.env }}
-            - name: {{ $key }}
-              value: {{ $value }}
+            {{- range .Values.controllerManager.container.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
             {{- end }}
           {{- end }}
           livenessProbe:

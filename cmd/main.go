@@ -35,8 +35,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
+	databasev1alpha1 "github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
 	"github.com/greatsql-sigs/greatsql-operator/internal/controller"
 	"github.com/greatsql-sigs/greatsql-operator/internal/pkg/version"
+	webhookdatabasev1alpha1 "github.com/greatsql-sigs/greatsql-operator/internal/webhook/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -49,6 +51,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(databasev1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -67,6 +71,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableWebhooks bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
@@ -79,6 +84,8 @@ func main() {
 		"If set the metrics endpoint is served securely")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableWebhooks, "enable-webhooks", false,
+		"If set, webhooks will be enabled")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -170,13 +177,52 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "GroupReplicationCluster")
 		os.Exit(1)
 	}
-	// if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-	// 	if err = (&v1alpha1.GroupReplicationCluster{}).SetupWebhookWithManager(mgr); err != nil {
-	// 		setupLog.Info("webhook is not enbled")
-	// 		setupLog.Error(err, "unable to create webhook", "webhook", "GroupReplicationCluster")
-	// 		os.Exit(1)
-	// 	}
-	// }
+	// nolint:goconst
+	if enableWebhooks {
+		if err = webhookdatabasev1alpha1.SetupStandaloneWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Standalone")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if enableWebhooks {
+		if err = webhookdatabasev1alpha1.SetupGroupReplicationClusterWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "GroupReplicationCluster")
+			os.Exit(1)
+		}
+	}
+	if err = (&controller.SchedulingBackupReconciler{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		Log:           ctrl.Log.WithName("controllers").WithName("SchedulingBackup"),
+		EventRecorder: mgr.GetEventRecorderFor("SchedulingBackup"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SchedulingBackup")
+		os.Exit(1)
+	}
+	if err = (&controller.RestoreReconciler{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		Log:           ctrl.Log.WithName("controllers").WithName("Restore"),
+		EventRecorder: mgr.GetEventRecorderFor("Restore"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Restore")
+		os.Exit(1)
+	}
+	// nolint:goconst
+	if enableWebhooks {
+		if err = webhookdatabasev1alpha1.SetupSchedulingBackupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "SchedulingBackup")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if enableWebhooks {
+		if err = webhookdatabasev1alpha1.SetupRestoreWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Restore")
+			os.Exit(1)
+		}
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

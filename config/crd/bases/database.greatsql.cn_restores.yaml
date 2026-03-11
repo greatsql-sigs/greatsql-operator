@@ -1,0 +1,354 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: restores.database.greatsql.cn
+spec:
+  group: database.greatsql.cn
+  names:
+    kind: Restore
+    listKind: RestoreList
+    plural: restores
+    shortNames:
+    - gr
+    singular: restore
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Restore phase
+      jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Status message
+      jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Restore is the Schema for the restores API (XtraBackup physical
+          restore).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RestoreSpec defines the desired state of Restore (XtraBackup
+              physical restore).
+            properties:
+              backupRef:
+                description: BackupRef is the name of a SchedulingBackup in the same
+                  namespace to restore from. Mutually exclusive with BackupSource.
+                type: string
+              backupSource:
+                description: BackupSource is the external backup location (PVC or
+                  S3). Mutually exclusive with BackupRef.
+                properties:
+                  pvc:
+                    description: PVC claim name in the same namespace where the backup
+                      is stored.
+                    properties:
+                      claimName:
+                        description: ClaimName is the name of the PVC containing the
+                          backup.
+                        type: string
+                      path:
+                        description: Path inside the PVC (e.g. /backup). Optional,
+                          defaults to root.
+                        type: string
+                    required:
+                    - claimName
+                    type: object
+                  s3:
+                    description: S3-compatible source.
+                    properties:
+                      bucket:
+                        description: Bucket name.
+                        type: string
+                      credentialsSecret:
+                        description: CredentialsSecret name (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).
+                        type: string
+                      endpoint:
+                        description: Endpoint URL for S3-compatible storage. Omit
+                          for AWS.
+                        type: string
+                      path:
+                        description: Path/prefix inside the bucket (e.g. my-backup/2024-01-15).
+                        type: string
+                      region:
+                        description: Region.
+                        type: string
+                      verifyTLS:
+                        type: boolean
+                    required:
+                    - bucket
+                    - credentialsSecret
+                    - region
+                    type: object
+                type: object
+              clusterRef:
+                description: ClusterRef is the cluster to restore to (GroupReplicationCluster
+                  or Standalone).
+                properties:
+                  apiVersion:
+                    description: APIVersion of the target resource (e.g. database.greatsql.cn/v1alpha1).
+                    type: string
+                  kind:
+                    description: Kind of the target resource (GroupReplicationCluster
+                      or Standalone).
+                    type: string
+                  name:
+                    description: Name of the target resource.
+                    type: string
+                  namespace:
+                    description: Namespace of the target resource. Defaults to the
+                      same namespace as the Backup/Restore CR.
+                    type: string
+                required:
+                - name
+                type: object
+              containerOptions:
+                description: ContainerOptions override env/args for xtrabackup tools.
+                properties:
+                  env:
+                    description: Env for the backup/restore container.
+                    items:
+                      description: EnvVar represents an environment variable present
+                        in a Container.
+                      properties:
+                        name:
+                          description: Name of the environment variable. Must be a
+                            C_IDENTIFIER.
+                          type: string
+                        value:
+                          description: |-
+                            Variable references $(VAR_NAME) are expanded
+                            using the previously defined environment variables in the container and
+                            any service environment variables. If a variable cannot be resolved,
+                            the reference in the input string will be unchanged. Double $$ are reduced
+                            to a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                            "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                            Escaped references will never be expanded, regardless of whether the variable
+                            exists or not.
+                            Defaults to "".
+                          type: string
+                        valueFrom:
+                          description: Source for the environment variable's value.
+                            Cannot be used if value is not empty.
+                          properties:
+                            configMapKeyRef:
+                              description: Selects a key of a ConfigMap.
+                              properties:
+                                key:
+                                  description: The key to select.
+                                  type: string
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                optional:
+                                  description: Specify whether the ConfigMap or its
+                                    key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            fieldRef:
+                              description: |-
+                                Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`,
+                                spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+                              properties:
+                                apiVersion:
+                                  description: Version of the schema the FieldPath
+                                    is written in terms of, defaults to "v1".
+                                  type: string
+                                fieldPath:
+                                  description: Path of the field to select in the
+                                    specified API version.
+                                  type: string
+                              required:
+                              - fieldPath
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            resourceFieldRef:
+                              description: |-
+                                Selects a resource of the container: only resources limits and requests
+                                (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+                              properties:
+                                containerName:
+                                  description: 'Container name: required for volumes,
+                                    optional for env vars'
+                                  type: string
+                                divisor:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  description: Specifies the output format of the
+                                    exposed resources, defaults to "1"
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                resource:
+                                  description: 'Required: resource to select'
+                                  type: string
+                              required:
+                              - resource
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            secretKeyRef:
+                              description: Selects a key of a secret in the pod's
+                                namespace
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must
+                                    be a valid secret key.
+                                  type: string
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key
+                                    must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  xbcloudArgs:
+                    description: XbcloudArgs extra arguments for xbcloud (S3).
+                    items:
+                      type: string
+                    type: array
+                  xbstreamArgs:
+                    description: XbstreamArgs extra arguments for xbstream.
+                    items:
+                      type: string
+                    type: array
+                  xtrabackupArgs:
+                    description: XtrabackupArgs extra arguments for xtrabackup.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              resources:
+                description: Resources for the restore Job container.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This is an alpha field and requires enabling the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+            required:
+            - clusterRef
+            type: object
+          status:
+            description: RestoreStatus defines the observed state of Restore.
+            properties:
+              completedAt:
+                format: date-time
+                type: string
+              jobName:
+                type: string
+              message:
+                type: string
+              phase:
+                description: Phase of the restore (Pending, Running, Completed, Failed).
+                type: string
+              reason:
+                type: string
+              startedAt:
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

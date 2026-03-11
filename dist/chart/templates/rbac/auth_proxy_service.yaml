@@ -1,4 +1,4 @@
-{{- if .Values.rbac.enable }}
+{{- if and .Values.rbac.enable (not .Values.metrics.enable) }}
 apiVersion: v1
 kind: Service
 metadata:

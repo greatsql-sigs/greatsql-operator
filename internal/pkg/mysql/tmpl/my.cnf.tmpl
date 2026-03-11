@@ -48,7 +48,7 @@ loose-lock_ddl_polling_runtime = 200
 # Logs
 log_timestamps = SYSTEM
 general_log = 0
-general_log_file = /dev/stdout
+general_log_file = /data/GreatSQL/general.log
 log_error = /data/GreatSQL/error.log
 # mac下会遇到权限问题，所以输出到文件
 # log_error = /dev/stderr 
@@ -107,13 +107,13 @@ loose-plugin_load_add = 'mysql_clone.so'
 # MGR
 loose-plugin_load_add = 'group_replication.so'
 loose-group_replication_group_name = {{.GroupReplicationGroupName}}
-loose-group_replication_view_change_uuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"
+loose-group_replication_view_change_uuid = {{.GroupReplicationViewChangeUUID}}
 loose-group_replication_local_address = {{.GroupReplicationLocalAddress}}
 loose-group_replication_group_seeds = {{.GroupReplicationGroupSeeds}}
 loose-group_replication_communication_stack = "XCOM"
 loose-group_replication_recovery_use_ssl = OFF
 loose-group_replication_ssl_mode = DISABLED
-loose-group_replication_start_on_boot = ON
+loose-group_replication_start_on_boot = {{if .GroupReplicationStartOnBoot}}ON{{else}}OFF{{end}}
 loose-group_replication_bootstrap_group = OFF
 loose-group_replication_exit_state_action = READ_ONLY
 loose-group_replication_flow_control_mode = {{.GroupReplicationFlowControl}}
@@ -121,7 +121,7 @@ loose-group_replication_single_primary_mode = {{if .SinglePrimaryMode}}ON{{else}
 loose-group_replication_enforce_update_everywhere_checks = {{if .SinglePrimaryMode}}OFF{{else}}ON{{end}}
 loose-group_replication_majority_after_mode = ON
 loose-group_replication_communication_max_message_size = 10M
-loose-group_replication_arbitrator = {{.GroupReplicationArbitrator}}
+loose-group_replication_arbitrator = {{.GroupReplicationArbitrator }}
 loose-group_replication_single_primary_fast_mode = 1
 loose-group_replication_request_time_threshold = 100
 loose-group_replication_primary_election_mode = GTID_FIRST

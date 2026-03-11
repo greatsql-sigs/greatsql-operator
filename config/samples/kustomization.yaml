@@ -3,4 +3,8 @@ resources:
 - namespaces.yaml
 - greatsql_v1_standalone.yaml
 - greatsql_v1_groupreplicationclusters.yaml
+- database.greatsql.cn_v1alpha1_groupreplicationcluster.yaml
+- database.greatsql.cn_v1alpha1_standalone.yaml
+- database_v1alpha1_schedulingbackup.yaml
+- database_v1alpha1_restore.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

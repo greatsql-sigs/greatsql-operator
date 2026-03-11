@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: greatsql
 
 spec:
+  # 默认参数（webhook 填充）：size=1、Pod={}；必填：container.name、container.image
   size: 1
   version: "8.0.32-26"
   serviceAccountName: default
@@ -17,7 +18,7 @@ spec:
     name: greatsql
     image: greatsql/greatsql:8.0.32-26
     imagePullPolicy: IfNotPresent
-    imagePullSecrets:
+    imagePullSecrets: []
     resources:
       requests:
         memory: "2Gi"
@@ -25,21 +26,59 @@ spec:
       limits:
         memory: "8Gi"
         cpu: "4"
+    # 探针（可选）：推荐对 MySQL 3306 配置，不填则无探针
     startupProbe:
       tcpSocket:
         port: 3306
-      initialDelaySeconds: 5
+      initialDelaySeconds: 60
       periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 30
+      successThreshold: 1
     readinessProbe:
       tcpSocket:
         port: 3306
-      initialDelaySeconds: 5
-      periodSeconds: 10
+      initialDelaySeconds: 60
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
     livenessProbe:
       tcpSocket:
         port: 3306
-      initialDelaySeconds: 30
-      periodSeconds: 10
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 5
+      successThreshold: 1
+    # 优雅退出（可选）：收到 TERM 时先执行 SHUTDOWN 再退出，推荐生产环境使用
+    lifecycle:
+      preStop:
+        exec:
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if pgrep -f "mysqld" > /dev/null 2>&1; then
+                echo "MySQL is running, sending graceful shutdown..."
+                if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+                  timeout 30 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -h127.0.0.1 -e "SHUTDOWN;" 2>/dev/null || true
+                else
+                  timeout 30 mysql -uroot -h127.0.0.1 -e "SHUTDOWN;" 2>/dev/null || true
+                fi
+                for i in $(seq 1 10); do
+                  if ! pgrep -f "mysqld" > /dev/null 2>&1; then
+                    echo "MySQL has stopped gracefully"
+                    exit 0
+                  fi
+                  sleep 1
+                done
+                echo "Sending TERM signal to MySQL..."
+                kill -TERM 1 2>/dev/null || true
+                sleep 2
+              else
+                echo "MySQL is not running, nothing to shutdown"
+              fi
     env:
       - name: LOWER_CASE_TABLE_NAMES
         value: "0"
@@ -49,20 +88,24 @@ spec:
       #       name: greatsql-standalone-secret
       #       key: MYSQL_ROOT_PASSWORD
 
+  # 调度与拓扑（均为可选）
+  # 反亲和：按 hostname 打散 Pod，避免同节点多副本
   affinity:
     antiAffinityTopologyKey: "kubernetes.io/hostname"
   nodeSelector:
     kubernetes.io/os: linux
+  # 污点容忍：示例为容忍 master 节点 NoSchedule，按集群实际情况修改或省略
   tolerations:
     - key: node-role.kubernetes.io/master
       effect: NoSchedule
   schedulerName: default-scheduler
-  terminationGracePeriodSeconds: 30
+  terminationGracePeriodSeconds: 60
   podSecurityContext:
     fsGroup: 1000
   dnsPolicy: ClusterFirst
   restartPolicy: Always
 
+  # 存储（可选）：不填则无 PVC
   storages:
     storageClassName: standard
     accessModes: ["ReadWriteOnce"]
@@ -72,12 +115,14 @@ spec:
   upgrade:
     versionServiceEndpoint: ""
     apply: ""
+  # 更新策略（可选）：默认 RollingUpdate
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
       partition: 0
       maxUnavailable: 1
 
+  # 服务（可选）：type 默认多用 ClusterIP，对外暴露可用 LoadBalancer/NodePort
   service:
     type: LoadBalancer
     selector:

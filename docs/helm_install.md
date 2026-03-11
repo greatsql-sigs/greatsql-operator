@@ -1,109 +1,93 @@
 # Helm 安装
 
 ## GreatSQL Operator Helm Chart
-GreatSQL Operator Helm Chart 旨在部署 GreatSQL Operator。它简化了在 Kubernetes 集群中部署和管理基于 MySQL 的数据库的过程，支持单实例和组复制（集群）模式。
+
+本 Chart 用于在 Kubernetes 集群中部署 **GreatSQL Operator**（控制器）。安装完成后，可通过创建 Standalone 或 GroupReplicationCluster 等 CR 来部署和管理 GreatSQL/MySQL 实例。
 
 ## 先决条件
-Kubernetes 1.22+</br>
-Helm 3.0+</br>
-cert-manager v1.5.0+（用于 webhook 功能）</br>
-与 PersistentVolumes 兼容的 StorageClass（持久性所需）</br>
+
+- Kubernetes 1.22+
+- Helm 3.0+
+- cert-manager v1.5.0+（仅当启用 webhook 或 metrics TLS 时需要）
 
 ## 安装
+
 ### 添加 Helm 存储库
-在安装图表之前，请添加官方存储库：
 
 ```sh
-helm repo add greatsql-operator https://greatsql-sigs.github.io/greatsql-operator-helm
+helm repo add greatsql-operator https://greatsql-sigs.github.io/greatsql-operator
 helm repo update
 ```
 
-### 安装图表
-要安装图表，请使用以下命令
+### 安装 Chart
 
 ```sh
-helm install greatsql greatsql-operator/greatsql-operator
+helm install greatsql greatsql-operator/greatsql-operator --create-namespace --namespace greatsql-system
 ```
 
-这将使用默认值安装图表。您可以通过指定参数来自定义安装（请参阅下面的“配置”部分）。
+使用默认值安装。可通过 `--set` 或自定义 values 文件覆盖配置（见下方「配置」）。
 
 ## 卸载
-要卸载已部署的图表，请使用以下命令
 
 ```sh
-helm delete greatsql
+helm uninstall greatsql -n greatsql-system
 ```
-此命令将删除与图表关联的所有资源，但默认保留 PersistentVolumeClaims（PVC），以避免意外数据丢失。
+
+默认会删除与 release 关联的资源。若安装时启用了 `crd.keep`，CRD 会保留，以避免误删自定义资源。
 
 ## 配置
-### 默认值
-您可以通过修改默认值.yaml 文件或通过 --set 标志传递自定义值来自定义安装。
 
-#### 关键配置选项：
+Chart 的默认值与可配置项见 [dist/chart/values.yaml](../dist/chart/values.yaml)。常用选项如下：
+
 | 参数 | 描述 | 默认 |
-|----------------------------|---------------------------------------------------------------|---------------------------------------------------------------|
-| `replicaCount` | 单实例部署的副本数 | `1` |
-| `type` | 部署类型：`Standalone` 或 `GroupReplicationCluster` | `Standalone` |
-| `image.repository` | 映像存储库 | `registry.cn-chengdu.aliyuncs.com/greatsql/greatsql-operator` |
-| `image.tag` | 图片标签 | `latest` |
-| `service.type` | Kubernetes 服务类型 | `ClusterIP` |
-| `service.port` | MySQL 服务端口 | `3306` |
-| `storage.enabled` | 启用持久化存储 | `true` |
-| `storage.size` | PersistentVolumeClaim 请求的存储大小 | `10Gi` |
-| `configFile.enabled` | 启用自定义配置文件挂载 | `false` |
-| `configFile.configMapName` | 用于配置的 ConfigMap 的名称 | `greatsql-config` |
+|------|------|------|
+| `controllerManager.replicas` | Operator 控制器副本数（建议 1，多副本时需 leader-elect） | `3` |
+| `controllerManager.container.image.repository` | Operator 镜像仓库 | `registry.cn-beijing.aliyuncs.com/greatsql/greatsql-operator` |
+| `controllerManager.container.image.tag` | 镜像标签 | `latest` |
+| `controllerManager.container.env` | 控制器环境变量（如协调间隔等） | 见 values.yaml |
+| `controllerManager.container.resources` | 资源 requests/limits | 见 values.yaml |
+| `rbac.enable` | 是否创建 RBAC（ServiceAccount、Role、RoleBinding 等） | `true` |
+| `crd.enable` | 是否安装 CRD | `true` |
+| `crd.keep` | 卸载时是否保留 CRD（`helm.sh/resource-policy: keep`） | `true` |
+| `metrics.enable` | 是否创建 metrics Service（:8443） | `true` |
+| `prometheus.enable` | 是否创建 ServiceMonitor（需 Prometheus Operator） | `false` |
+| `certmanager.enable` | 是否通过 cert-manager 为 metrics 签发 TLS 证书 | `false` |
+| `networkPolicy.enable` | 是否创建 NetworkPolicy | `false` |
 
-## 示例配置
-### 1. 部署 Standalone
+### 示例：自定义镜像与副本数
+
 ```sh
 helm install greatsql greatsql-operator/greatsql-operator \
---set type=Standalone \
---set replicaCount=1 \
---set storage.size=20Gi
+  --create-namespace --namespace greatsql-system \
+  --set controllerManager.replicas=1 \
+  --set controllerManager.container.image.repository=myreg/greatsql-operator \
+  --set controllerManager.container.image.tag=v1.0.0
 ```
 
-### 2. 部署 GroupReplicationCluster
-```sh
-helm install greatsql-cluster greatsql-operator/greatsql-operator \
---set type=GroupReplicationCluster \
---set cluster.replicas=3 \
---set storage.size=50Gi \
---set configFile.enabled=true \
-```
+### 示例：启用 Prometheus 监控
 
-### 3. 启用自定义 ConfigMap
-[!注意]：GreatSQL Operator 中，greatsql的配置文件是由operator本身来维护，在每次发布版本的时候会将配置文件打包到二进制文件中，每个版本发布都会跟随greatsql官方的版本发布而更新配置文件，所以在一般情况下不推荐使用自定义配置文件，除非有特殊需求。
-
-如果要挂载自定义 my.cnf 配置，请创建一个ConfigMap：
-```sh
-kubectl create configmap greatsql-config --from-literal=my.cnf="[mysqld]\nmax_connections=200"
-```
-
-然后使用以下命令安装图表：
 ```sh
 helm install greatsql greatsql-operator/greatsql-operator \
---set configFile.enabled=true \
---set configFile.configMapName=greatsql-config
-```
-## 持久性
-默认情况下，持久存储处于启用状态。要禁用它，请将 storage.enabled 设置为 false：
-```sh
-helm install greatsql greatsql-operator/greatsql-operator \
---set storage.enabled=false
+  --create-namespace --namespace greatsql-system \
+  --set prometheus.enable=true
 ```
 
-启用后，将创建 PersistentVolumeClaims 来存储 MySQL 数据，即使删除或重新启动 Pod，也能确保数据持久性。
+若需为 metrics 端点配置 TLS，可同时启用 cert-manager：
+
+```sh
+--set certmanager.enable=true
+```
 
 ### 升级
-要将图表升级到较新的版本或更新值，请使用以下命令：
+
 ```sh
-helm upgrade greatsql greatsql-operator/greatsql-operator --set <parameters>
+helm upgrade greatsql greatsql-operator/greatsql-operator -n greatsql-system --set <参数>
 ```
 
 ## 监控
-GreatSQL 公开基本的活跃度和就绪性探测以确保正常运行。您还可以集成 Prometheus 和 Grafana 等监控工具以获取高级指标。
+
+Operator 提供健康检查（/healthz、/readyz）和 metrics（:8443/metrics）。启用 `prometheus.enable` 后可被 Prometheus Operator 采集。
 
 ## 支持
-如需GreatSQL Operator Helm支持，请访问 [GreatSQL SIGs GitHub 存储库或在存储库中提出问题](https://github.com/greatsql-sigs/greatsql-operator-helm)。
 
-通过使用此图表，您可以轻松地在 Kubernetes 集群中部署和管理 MySQL 实例，无论是用于开发、测试还是生产环境。
+问题与建议请提交至 [greatsql-operator 仓库](https://github.com/greatsql-sigs/greatsql-operator)。

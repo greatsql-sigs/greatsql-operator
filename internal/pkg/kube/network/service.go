@@ -7,7 +7,6 @@ import (
 	"github.com/greatsql-sigs/greatsql-operator/internal/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func BuildServices(cr any, service v1alpha1.Service) (*corev1.Service, error) {
@@ -22,17 +21,19 @@ func BuildServices(cr any, service v1alpha1.Service) (*corev1.Service, error) {
 	// 设置默认端口
 	ports := []corev1.ServicePort{
 		{
-			Name:       "mysql",
-			Port:       3306,
-			TargetPort: intstr.FromInt32(3306),
-			Protocol:   corev1.ProtocolTCP,
+			Name:     consts.MySQL,
+			Port:     consts.MySQLPort,
+			Protocol: corev1.ProtocolTCP,
 		},
 		{
-			Name: "mysql-x-protocol",
-			// MySQL X Protocol 默认端口
-			Port:       33060,
-			TargetPort: intstr.FromInt32(33060),
-			Protocol:   corev1.ProtocolTCP,
+			Name:     consts.MySQLXProtocol,
+			Port:     consts.MySQLXProtocolPort,
+			Protocol: corev1.ProtocolTCP,
+		},
+		{
+			Name:     consts.GroupReplication,
+			Port:     consts.GroupReplicationPort,
+			Protocol: corev1.ProtocolTCP,
 		},
 	}
 
@@ -70,9 +71,9 @@ func BuildServices(cr any, service v1alpha1.Service) (*corev1.Service, error) {
 		},
 		Spec: corev1.ServiceSpec{
 			Type:                  serviceType,
+			Ports:                 ports,
 			InternalTrafficPolicy: &internalTrafficPolicy,
 			ExternalTrafficPolicy: externalTrafficPolicy,
-			Ports:                 ports,
 			Selector:              selector,
 			LoadBalancerClass:     service.LoadBalancerClass,
 		},

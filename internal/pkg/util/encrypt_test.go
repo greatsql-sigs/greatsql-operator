@@ -221,7 +221,7 @@ func BenchmarkBase64Encode(b *testing.B) {
 
 func BenchmarkBase64Decode(b *testing.B) {
 	encoded := "R3JlYXRTUUxAMjAyNV90ZXN0X3Bhc3N3b3JkX2JlbmNobWFyaw=="
-	
+
 	for b.Loop() {
 		_, _ = Base64Decode(encoded)
 	}

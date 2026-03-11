@@ -1,12 +1,5 @@
 package consts
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-04-03 15:56:43
- * @file: greatsql_const.go
- * @description: greatsql const
- */
-
 // greatsql const
 const (
 	// DataDir dir
@@ -18,15 +11,29 @@ const (
 
 // greatsql port const
 const (
+	// MySQL
+	MySQL string = "mysql"
+	// MySQLXProtocol name
+	MySQLXProtocol string = "mysqlx"
+	// Group Replication name
+	GroupReplication string = "group-repl"
+
 	// MySQLPort mysql port
 	MySQLPort int32 = 3306
-	// MgrCommunicatePort mgr node comm port
-	MgrCommunicatePort int32 = 33061
+	// MySQLXProtocol port
+	MySQLXProtocolPort int32 = 33060
+	// Group Replication port
+	GroupReplicationPort int32 = 33061
 )
 
 const (
 	RootUser string = "root"
 	MySQLDB  string = "mysql"
+)
+
+// XtraBackup image for physical backup/restore (Percona XtraBackup 8, compatible with GreatSQL 8)
+const (
+	XtraBackupImageDefault string = "percona/percona-xtrabackup:8.0"
 )
 
 const (
@@ -36,4 +43,19 @@ const (
 	REPLCATION_CHANNEL_PASSWORD_KEY string = "MYSQL_REPLICATION_PASSWORD"
 	// default replication channel user
 	REPLCATION_CHANNEL_USER string = "repl"
+)
+
+type Step string
+
+// Cluster initialization step names
+const (
+	StepDisableSuperReadOnly        Step = "DISABLE_SUPER_READ_ONLY"
+	StepCreateReplicationUser       Step = "CREATE_REPLICATION_USER"
+	StepGrantPrivileges             Step = "GRANT_PRIVILEGES"
+	StepConfigureReplicationChannel Step = "CONFIGURE_REPLICATION_CHANNEL"
+	StepSetBootstrapNode            Step = "SET_BOOTSTRAP_NODE"
+	StepStartGroupReplication       Step = "START_GROUP_REPLICATION"
+	StepWaitForMemberOnline         Step = "WAIT_FOR_MEMBER_ONLINE"
+	StepResetBootstrapFlag          Step = "RESET_BOOTSTRAP_FLAG"
+	StepWaitForPrimaryOnline        Step = "WAIT_FOR_PRIMARY_ONLINE"
 )

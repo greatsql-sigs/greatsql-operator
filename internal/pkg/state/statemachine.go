@@ -25,8 +25,8 @@ func NewStateMachine(status *v1alpha1.Status) *StateMachine {
 // validTransitions 状态转换规则
 var validTransitions = map[v1alpha1.Phase][]v1alpha1.Phase{
 	v1alpha1.PhaseInitializing: {v1alpha1.PhaseRunning, v1alpha1.PhaseError, v1alpha1.PhaseReady},
-	v1alpha1.PhaseRunning:      {v1alpha1.PhaseReady, v1alpha1.PhaseError, v1alpha1.PhaseStoping},
-	v1alpha1.PhaseStoping:      {v1alpha1.PhaseError},
+	v1alpha1.PhaseRunning:      {v1alpha1.PhaseReady, v1alpha1.PhaseError, v1alpha1.PhaseStopping},
+	v1alpha1.PhaseStopping:     {v1alpha1.PhaseError},
 	v1alpha1.PhaseReady:        {v1alpha1.PhaseRunning, v1alpha1.PhaseError, v1alpha1.PhasePaused},
 	v1alpha1.PhaseError:        {v1alpha1.PhaseInitializing},
 	v1alpha1.PhasePaused:       {v1alpha1.PhaseRunning, v1alpha1.PhaseError},
@@ -87,6 +87,12 @@ func (sm *StateMachine) SetStatusReason(reason string) {
 // SetReady 设置 Ready 字段
 func (sm *StateMachine) SetReady(count int32) {
 	sm.status.Ready = count
+}
+
+// SetMessageAndReason 设置状态信息和原因
+func (sm *StateMachine) SetMessageAndReason(msg, reason string) {
+	sm.status.Message = msg
+	sm.status.Reason = reason
 }
 
 // GetStatus 获取完整 status 对象

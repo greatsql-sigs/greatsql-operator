@@ -137,10 +137,11 @@ func BuildStatefulSet(cr v1alpha1.Pod,
 			},
 		},
 		Resources:       cr.Container.Resources,
-		StartupProbe:    &cr.Container.StartupProbe,
-		ReadinessProbe:  &cr.Container.ReadinessProbe,
-		LivenessProbe:   &cr.Container.LivenessProbe,
+		StartupProbe:    cr.Container.StartupProbe,
+		ReadinessProbe:  cr.Container.ReadinessProbe,
+		LivenessProbe:   cr.Container.LivenessProbe,
 		SecurityContext: cr.Container.SecurityContext,
+		Lifecycle:       cr.Container.Lifecycle,
 	}
 
 	sts := &appsv1.StatefulSet{

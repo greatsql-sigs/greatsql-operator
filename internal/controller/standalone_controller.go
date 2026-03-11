@@ -56,9 +56,14 @@ type StandaloneReconciler struct {
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=database.greatsql.cn,resources=standalones/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=scheduling.k8s.io,resources=priorityclasses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -90,6 +95,7 @@ func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Handle finalizer
 	if err := r.handleFinalizer(ctx, cr); err != nil {
+		r.EventRecorder.Event(cr, corev1.EventTypeWarning, consts.StatusReasonFinalizerError, err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -103,6 +109,11 @@ func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{RequeueAfter: time.Minute}, err
 	} else if !exists {
 		if err := r.createRequiredResources(ctx, req, cr); err != nil {
+			cr.Status.Status.Phase = v1alpha1.PhaseError
+			cr.Status.Status.Message = err.Error()
+			cr.Status.Status.Reason = consts.StatusReasonCreateResourcesError
+			_ = kube.UpdateStatusWithRetry(ctx, r.Client, cr, cr.Status)
+			r.EventRecorder.Event(cr, corev1.EventTypeWarning, consts.StatusReasonCreateResourcesError, err.Error())
 			return ctrl.Result{}, err
 		}
 	}
@@ -113,7 +124,7 @@ func (r *StandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 // handleFinalizer handles the finalizer of the Standalone
@@ -220,11 +231,26 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context,
 			r.Log.Error(err, "Could not create secret")
 			return err
 		}
+
+		// 自动注入环境变量，让 Pod 使用 Operator 创建的 Secret（MySQL 镜像读取 MYSQL_ROOT_PASSWORD）
+		cr.Spec.Container.Envs = append(cr.Spec.Container.Envs, corev1.EnvVar{
+			Name: consts.MYSQL_ROOT_PASSWORD_KEY,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: secretName,
+					},
+					Key: consts.MYSQL_ROOT_PASSWORD_KEY,
+				},
+			},
+		})
+		r.Log.Info("Injected MYSQL_ROOT_PASSWORD env from auto-created secret", "secretName", secretName)
 	}
 
 	// 创建 MySQL 配置
+	// MySQL server_id 不能为 0，单机模式使用固定值 1
 	cnf := mysql.NewConfig(
-		mysql.WithServerID("0"),
+		mysql.WithServerID("1"),
 		mysql.WithEnableCluster(false),
 		mysql.WithGroupReplicationGroupName("greatsql"),
 		mysql.WithGroupReplicationGroupSeeds(""),
@@ -251,12 +277,12 @@ func (r *StandaloneReconciler) createRequiredResources(ctx context.Context,
 	sts, err := workload.BuildStatefulSet(*cr.Spec.Pod, cr.Spec.Size, req.Name, req.Namespace, configMapName)
 	sts.Spec.Template.Spec.Containers[0].Ports = append(sts.Spec.Template.Spec.Containers[0].Ports,
 		corev1.ContainerPort{
-			Name:          "mysqlx",
-			ContainerPort: 33060,
+			Name:          consts.MySQLXProtocol,
+			ContainerPort: consts.MySQLXProtocolPort,
 			Protocol:      corev1.ProtocolTCP,
 		}, corev1.ContainerPort{
-			Name:          "mysql",
-			ContainerPort: 3306,
+			Name:          consts.MySQL,
+			ContainerPort: consts.MySQLPort,
 			Protocol:      corev1.ProtocolTCP,
 		})
 	if err != nil {

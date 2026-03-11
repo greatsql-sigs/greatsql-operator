@@ -15,4 +15,20 @@ resources:
 - auth_proxy_service.yaml
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
-- auth_proxy_client_clusterrole.yaml
+- auth_proxy_client_clusterrole.yaml# For each CRD, "Admin", "Editor" and "Viewer" roles are scaffolded by
+# default, aiding admins in cluster management. Those roles are
+# not used by the {{ .ProjectName }} itself. You can comment the following lines
+# if you do not want those helpers be installed with your Project.
+- restore_admin_role.yaml
+- restore_editor_role.yaml
+- restore_viewer_role.yaml
+- schedulingbackup_admin_role.yaml
+- schedulingbackup_editor_role.yaml
+- schedulingbackup_viewer_role.yaml
+- database.greatsql.cn_standalone_admin_role.yaml
+- database.greatsql.cn_standalone_editor_role.yaml
+- database.greatsql.cn_standalone_viewer_role.yaml
+- database.greatsql.cn_groupreplicationcluster_admin_role.yaml
+- database.greatsql.cn_groupreplicationcluster_editor_role.yaml
+- database.greatsql.cn_groupreplicationcluster_viewer_role.yaml
+

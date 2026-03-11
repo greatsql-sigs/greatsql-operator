@@ -8,38 +8,35 @@ import (
 	"text/template"
 )
 
-/**
- * @author: HuaiAn xu
- * @date: 2024-04-12 10:39:17
- * @file: config.go
- * @description: mysql config
- */
-
 //go:embed tmpl/my.cnf.tmpl
 var tmplFS embed.FS
 
 type Config struct {
-	ServerID                     string
-	EnableCluster                bool
-	GroupReplicationGroupName    string
-	GroupReplicationLocalAddress string
-	GroupReplicationGroupSeeds   string // TODO: 这个参数可能是一个字符串数组，暂时先用字符串表示，后续待验证
-	ReportHost                   string
-	ReportPort                   int
-	GroupReplicationArbitrator   string
-	InnodbBufferPoolSize         string
-	SinglePrimaryMode            bool   // 是否使用单主模式，false表示多主模式
-	GroupReplicationConsistency  string // 一致性级别
-	GroupReplicationFlowControl  string // 流控模式
+	ServerID                       string
+	EnableCluster                  bool
+	GroupReplicationViewChangeUUID string
+	GroupReplicationGroupName      string
+	GroupReplicationLocalAddress   string
+	GroupReplicationGroupSeeds     string // TODO: 这个参数可能是一个字符串数组，暂时先用字符串表示,后续待验证
+	ReportHost                     string
+	ReportPort                     int
+	GroupReplicationArbitrator     string
+	GroupReplicationStartOnBoot    bool // 是否在启动时自动启动组复制
+	InnodbBufferPoolSize           string
+	SinglePrimaryMode              bool   // 是否使用单主模式，false表示多主模式
+	GroupReplicationConsistency    string // 一致性级别
+	GroupReplicationFlowControl    string // 流控模式
 }
 
 // NewConfig 创建一个新的MySQLConfig实例并设置默认值
 func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
 		EnableCluster:               false,
+		GroupReplicationStartOnBoot: true, // 默认启用自动启动
 		SinglePrimaryMode:           true,
 		GroupReplicationConsistency: "EVENTUAL",
 		GroupReplicationFlowControl: "QUOTA",
+		GroupReplicationArbitrator:  "OFF",
 	}
 	for _, opt := range opts {
 		opt(cfg)

@@ -84,6 +84,9 @@ spec:
         args:
           - --leader-elect=true
           - --leader-elect-namespace=greatsql-system
+          - --metrics-bind-address=:8443
+          - --health-probe-bind-address=:8081
+          - --enable-webhooks=true
         env:
           # 控制operator的协调（reconciliation）循环的时间间隔，10s
         - name: "RECONCILIATION_INTERVAL"

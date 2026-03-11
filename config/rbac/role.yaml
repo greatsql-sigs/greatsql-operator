@@ -8,7 +8,8 @@ rules:
   - ""
   resources:
   - configmaps
-  - secret
+  - persistentvolumeclaims
+  - secrets
   - services
   verbs:
   - create
@@ -19,10 +20,37 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
-  - deployments
-  - statefulset
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
   verbs:
   - create
   - delete
@@ -35,6 +63,8 @@ rules:
   - database.greatsql.cn
   resources:
   - groupreplicationclusters
+  - restores
+  - schedulingbackups
   - standalones
   verbs:
   - create
@@ -48,6 +78,8 @@ rules:
   - database.greatsql.cn
   resources:
   - groupreplicationclusters/finalizers
+  - restores/finalizers
+  - schedulingbackups/finalizers
   - standalones/finalizers
   verbs:
   - update
@@ -55,8 +87,22 @@ rules:
   - database.greatsql.cn
   resources:
   - groupreplicationclusters/status
+  - restores/status
+  - schedulingbackups/status
   - standalones/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

@@ -17,6 +17,13 @@ func WithEnableCluster(enable bool) Option {
 	}
 }
 
+// WithGroupReplicationViewChangeUUID sets the group replication view change UUID
+func WithGroupReplicationViewChangeUUID(uuid string) Option {
+	return func(c *Config) {
+		c.GroupReplicationViewChangeUUID = uuid
+	}
+}
+
 // WithGroupReplicationGroupName sets the group replication group UUID
 func WithGroupReplicationGroupName(name string) Option {
 	return func(c *Config) {
@@ -84,5 +91,12 @@ func WithGroupReplicationConsistency(level string) Option {
 func WithGroupReplicationFlowControl(mode string) Option {
 	return func(c *Config) {
 		c.GroupReplicationFlowControl = mode
+	}
+}
+
+// WithGroupReplicationStartOnBoot sets whether group replication starts automatically on boot
+func WithGroupReplicationStartOnBoot(enable bool) Option {
+	return func(c *Config) {
+		c.GroupReplicationStartOnBoot = enable
 	}
 }
