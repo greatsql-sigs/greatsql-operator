@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	databasev1alpha1 "github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
@@ -34,7 +32,7 @@ var standalonelog = logf.Log.WithName("standalone-resource")
 
 // SetupStandaloneWebhookWithManager 向 manager 注册 Standalone 的 webhook。
 func SetupStandaloneWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&databasev1alpha1.Standalone{}).
+	return ctrl.NewWebhookManagedBy(mgr, &databasev1alpha1.Standalone{}).
 		WithValidator(&StandaloneCustomValidator{}).
 		WithDefaulter(&StandaloneCustomDefaulter{}).
 		Complete()
@@ -45,14 +43,10 @@ func SetupStandaloneWebhookWithManager(mgr ctrl.Manager) error {
 // StandaloneCustomDefaulter 为 Standalone 设置默认值。
 type StandaloneCustomDefaulter struct{}
 
-var _ webhook.CustomDefaulter = &StandaloneCustomDefaulter{}
+var _ admission.Defaulter[*databasev1alpha1.Standalone] = &StandaloneCustomDefaulter{}
 
 // Default 在 create/update 时为未填字段设置默认值。
-func (d *StandaloneCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	c, ok := obj.(*databasev1alpha1.Standalone)
-	if !ok {
-		return fmt.Errorf("expected a Standalone but got %T", obj)
-	}
+func (d *StandaloneCustomDefaulter) Default(ctx context.Context, c *databasev1alpha1.Standalone) error {
 	standalonelog.Info("defaulting Standalone", "name", c.GetName())
 
 	if c.Spec.Size == nil {
@@ -77,7 +71,7 @@ func (d *StandaloneCustomDefaulter) Default(ctx context.Context, obj runtime.Obj
 // StandaloneCustomValidator 校验 Standalone 的 create/update。
 type StandaloneCustomValidator struct{}
 
-var _ webhook.CustomValidator = &StandaloneCustomValidator{}
+var _ admission.Validator[*databasev1alpha1.Standalone] = &StandaloneCustomValidator{}
 
 // validateStandaloneSpec 校验 spec：size 为正，容器 name/image 必填。
 func validateStandaloneSpec(spec *databasev1alpha1.StandaloneSpec) error {
@@ -98,29 +92,19 @@ func validateStandaloneSpec(spec *databasev1alpha1.StandaloneSpec) error {
 }
 
 // ValidateCreate 在创建时校验 spec。
-func (v *StandaloneCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	c, ok := obj.(*databasev1alpha1.Standalone)
-	if !ok {
-		return nil, fmt.Errorf("expected a Standalone but got %T", obj)
-	}
+func (v *StandaloneCustomValidator) ValidateCreate(ctx context.Context, c *databasev1alpha1.Standalone) (admission.Warnings, error) {
 	standalonelog.Info("validate create", "name", c.GetName())
 	return nil, validateStandaloneSpec(&c.Spec)
 }
 
 // ValidateUpdate 在更新时校验 spec。
-func (v *StandaloneCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	c, ok := newObj.(*databasev1alpha1.Standalone)
-	if !ok {
-		return nil, fmt.Errorf("expected a Standalone for newObj but got %T", newObj)
-	}
-	standalonelog.Info("validate update", "name", c.GetName())
-	return nil, validateStandaloneSpec(&c.Spec)
+func (v *StandaloneCustomValidator) ValidateUpdate(ctx context.Context, _ *databasev1alpha1.Standalone, newObj *databasev1alpha1.Standalone) (admission.Warnings, error) {
+	standalonelog.Info("validate update", "name", newObj.GetName())
+	return nil, validateStandaloneSpec(&newObj.Spec)
 }
 
 // ValidateDelete 删除时不拒绝，仅打日志。
-func (v *StandaloneCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	if c, ok := obj.(*databasev1alpha1.Standalone); ok {
-		standalonelog.Info("validate delete", "name", c.GetName())
-	}
+func (v *StandaloneCustomValidator) ValidateDelete(ctx context.Context, c *databasev1alpha1.Standalone) (admission.Warnings, error) {
+	standalonelog.Info("validate delete", "name", c.GetName())
 	return nil, nil
 }

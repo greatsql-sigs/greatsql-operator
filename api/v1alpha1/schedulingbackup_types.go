@@ -25,7 +25,8 @@ type SchedulingBackupSpec struct {
 	// ClusterRef is the cluster to back up (GroupReplicationCluster or Standalone).
 	ClusterRef ClusterRef `json:"clusterRef"`
 
-	// SourcePod is the specific pod to backup from (e.g. greatsql-mgr-0). If empty, controller chooses primary or first pod.
+	// SourcePod is the specific pod to back up from (e.g. greatsql-mgr-0).
+	// If empty, controller chooses primary or first pod.
 	// +optional
 	SourcePod *string `json:"sourcePod,omitempty"`
 
@@ -72,11 +73,12 @@ type SchedulingBackupStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:resource:shortName=sb
+//nolint:lll
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="Backup phase"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Message",type="string",priority=1,JSONPath=".status.message",description="Status message"
 
-// SchedulingBackup is the Schema for the schedulingbackups API (XtraBackup physical backup).
+// SchedulingBackup is the Schema for the schedulingBackups API (XtraBackup physical backup).
 type SchedulingBackup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

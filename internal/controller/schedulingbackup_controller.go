@@ -25,9 +25,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -47,6 +47,7 @@ type SchedulingBackupReconciler struct {
 	EventRecorder record.EventRecorder
 }
 
+//nolint:lll
 // +kubebuilder:rbac:groups=database.greatsql.cn,resources=schedulingbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=database.greatsql.cn,resources=schedulingbackups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=database.greatsql.cn,resources=schedulingbackups/finalizers,verbs=update
@@ -56,6 +57,7 @@ type SchedulingBackupReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch;update
 
+//nolint:gocyclo
 func (r *SchedulingBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("schedulingbackup", req.NamespacedName)
 
@@ -68,7 +70,8 @@ func (r *SchedulingBackupReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	// Already completed or failed without retry
-	if backup.Status.Phase == databasev1alpha1.BackupPhaseCompleted || backup.Status.Phase == databasev1alpha1.BackupPhaseFailed {
+	if backup.Status.Phase == databasev1alpha1.BackupPhaseCompleted ||
+		backup.Status.Phase == databasev1alpha1.BackupPhaseFailed {
 		if backup.Annotations == nil || backup.Annotations["database.greatsql.cn/retry"] != "true" {
 			return ctrl.Result{}, nil
 		}
@@ -101,7 +104,9 @@ func (r *SchedulingBackupReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	if k8serrors.IsNotFound(err) {
 		// Create PVC if needed (not using existing claim)
-		if backup.Spec.Storage.PVC != nil && (backup.Spec.Storage.PVC.ExistingClaim == nil || *backup.Spec.Storage.PVC.ExistingClaim == "") {
+		if backup.Spec.Storage.PVC != nil &&
+			(backup.Spec.Storage.PVC.ExistingClaim == nil ||
+				*backup.Spec.Storage.PVC.ExistingClaim == "") {
 			claimName := jobName + "-pvc"
 			pvc := &corev1.PersistentVolumeClaim{}
 			if err := r.Get(ctx, types.NamespacedName{Name: claimName, Namespace: backup.Namespace}, pvc); err != nil {
@@ -113,8 +118,12 @@ func (r *SchedulingBackupReconciler) Reconcile(ctx context.Context, req ctrl.Req
 					pvc = &corev1.PersistentVolumeClaim{
 						ObjectMeta: metav1.ObjectMeta{Name: claimName, Namespace: backup.Namespace},
 						Spec: corev1.PersistentVolumeClaimSpec{
-							AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-							Resources:        corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(size)}},
+							AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse(size),
+								},
+							},
 							StorageClassName: backup.Spec.Storage.PVC.StorageClassName,
 						},
 					}
@@ -124,7 +133,7 @@ func (r *SchedulingBackupReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				}
 			}
 		}
-		job, err = r.buildBackupJob(backup, jobName, mysqlHost, secretName, clusterNs)
+		job, err = r.buildBackupJob(backup, jobName, mysqlHost, secretName)
 		if err != nil {
 			return r.updateStatusError(ctx, backup, "BuildJobFailed", err.Error())
 		}
@@ -199,7 +208,10 @@ func (r *SchedulingBackupReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	return ctrl.Result{Requeue: true}, nil
 }
 
-func (r *SchedulingBackupReconciler) resolveClusterRef(ctx context.Context, backup *databasev1alpha1.SchedulingBackup) (clusterName, clusterNs, secretName string, err error) {
+func (r *SchedulingBackupReconciler) resolveClusterRef(
+	ctx context.Context,
+	backup *databasev1alpha1.SchedulingBackup,
+) (clusterName, clusterNs, secretName string, err error) {
 	ref := &backup.Spec.ClusterRef
 	clusterNs = ref.Namespace
 	if clusterNs == "" {
@@ -242,7 +254,10 @@ func (r *SchedulingBackupReconciler) resolveClusterRef(ctx context.Context, back
 	}
 }
 
-func (r *SchedulingBackupReconciler) buildBackupJob(backup *databasev1alpha1.SchedulingBackup, jobName, mysqlHost, secretName, secretNs string) (*batchv1.Job, error) {
+func (r *SchedulingBackupReconciler) buildBackupJob(
+	backup *databasev1alpha1.SchedulingBackup,
+	jobName, mysqlHost, secretName string,
+) (*batchv1.Job, error) {
 	backoffLimit := int32(1)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -288,19 +303,28 @@ func (r *SchedulingBackupReconciler) buildBackupJob(backup *databasev1alpha1.Sch
 			claimName = *backup.Spec.Storage.PVC.ExistingClaim
 		}
 		job.Spec.Template.Spec.Volumes = []corev1.Volume{{
-			Name:         "backup",
-			VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: claimName}},
+			Name: "backup",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: claimName,
+				},
+			},
 		}}
 		job.Spec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{{Name: "backup", MountPath: "/backup"}}
 	}
 
 	if backup.Spec.ContainerOptions != nil && len(backup.Spec.ContainerOptions.Env) > 0 {
-		job.Spec.Template.Spec.Containers[0].Env = append(job.Spec.Template.Spec.Containers[0].Env, backup.Spec.ContainerOptions.Env...)
+		job.Spec.Template.Spec.Containers[0].Env = append(job.Spec.Template.Spec.Containers[0].Env,
+			backup.Spec.ContainerOptions.Env...)
 	}
 	return job, nil
 }
 
-func (r *SchedulingBackupReconciler) updateStatusError(ctx context.Context, backup *databasev1alpha1.SchedulingBackup, reason, message string) (ctrl.Result, error) {
+func (r *SchedulingBackupReconciler) updateStatusError(
+	ctx context.Context,
+	backup *databasev1alpha1.SchedulingBackup,
+	reason, message string,
+) (ctrl.Result, error) {
 	backup.Status.Phase = databasev1alpha1.BackupPhaseFailed
 	backup.Status.Reason = reason
 	backup.Status.Message = message

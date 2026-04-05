@@ -264,8 +264,8 @@ func (r *RestoreReconciler) buildRestoreJob(restore *databasev1alpha1.Restore, j
 					RestartPolicy: corev1.RestartPolicyOnFailure,
 					Containers: []corev1.Container{
 						{
-							Name:  "xtrabackup",
-							Image: consts.XtraBackupImageDefault,
+							Name:    "xtrabackup",
+							Image:   consts.XtraBackupImageDefault,
 							Command: []string{"/bin/sh", "-c"},
 							Args: []string{
 								`set -e

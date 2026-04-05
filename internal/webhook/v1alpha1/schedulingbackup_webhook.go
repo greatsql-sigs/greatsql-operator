@@ -18,12 +18,9 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	databasev1alpha1 "github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
@@ -35,7 +32,7 @@ var schedulingbackuplog = logf.Log.WithName("schedulingbackup-resource")
 
 // SetupSchedulingBackupWebhookWithManager registers the webhook for SchedulingBackup in the manager.
 func SetupSchedulingBackupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&databasev1alpha1.SchedulingBackup{}).
+	return ctrl.NewWebhookManagedBy(mgr, &databasev1alpha1.SchedulingBackup{}).
 		WithValidator(&SchedulingBackupCustomValidator{}).
 		WithDefaulter(&SchedulingBackupCustomDefaulter{}).
 		Complete()
@@ -54,15 +51,10 @@ type SchedulingBackupCustomDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
 
-var _ webhook.CustomDefaulter = &SchedulingBackupCustomDefaulter{}
+var _ admission.Defaulter[*databasev1alpha1.SchedulingBackup] = &SchedulingBackupCustomDefaulter{}
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind SchedulingBackup.
-func (d *SchedulingBackupCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	schedulingbackup, ok := obj.(*databasev1alpha1.SchedulingBackup)
-
-	if !ok {
-		return fmt.Errorf("expected an SchedulingBackup object but got %T", obj)
-	}
+// Default implements admission.Defaulter so a webhook will be registered for the Kind SchedulingBackup.
+func (d *SchedulingBackupCustomDefaulter) Default(ctx context.Context, schedulingbackup *databasev1alpha1.SchedulingBackup) error {
 	schedulingbackuplog.Info("Defaulting for SchedulingBackup", "name", schedulingbackup.GetName())
 
 	// TODO(user): fill in your defaulting logic.
@@ -84,14 +76,10 @@ type SchedulingBackupCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 }
 
-var _ webhook.CustomValidator = &SchedulingBackupCustomValidator{}
+var _ admission.Validator[*databasev1alpha1.SchedulingBackup] = &SchedulingBackupCustomValidator{}
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type SchedulingBackup.
-func (v *SchedulingBackupCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	schedulingbackup, ok := obj.(*databasev1alpha1.SchedulingBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected a SchedulingBackup object but got %T", obj)
-	}
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type SchedulingBackup.
+func (v *SchedulingBackupCustomValidator) ValidateCreate(ctx context.Context, schedulingbackup *databasev1alpha1.SchedulingBackup) (admission.Warnings, error) {
 	schedulingbackuplog.Info("Validation for SchedulingBackup upon creation", "name", schedulingbackup.GetName())
 
 	// TODO(user): fill in your validation logic upon object creation.
@@ -99,25 +87,17 @@ func (v *SchedulingBackupCustomValidator) ValidateCreate(ctx context.Context, ob
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type SchedulingBackup.
-func (v *SchedulingBackupCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	schedulingbackup, ok := newObj.(*databasev1alpha1.SchedulingBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected a SchedulingBackup object for the newObj but got %T", newObj)
-	}
-	schedulingbackuplog.Info("Validation for SchedulingBackup upon update", "name", schedulingbackup.GetName())
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type SchedulingBackup.
+func (v *SchedulingBackupCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *databasev1alpha1.SchedulingBackup) (admission.Warnings, error) {
+	schedulingbackuplog.Info("Validation for SchedulingBackup upon update", "name", newObj.GetName())
 
 	// TODO(user): fill in your validation logic upon object update.
 
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type SchedulingBackup.
-func (v *SchedulingBackupCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	schedulingbackup, ok := obj.(*databasev1alpha1.SchedulingBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected a SchedulingBackup object but got %T", obj)
-	}
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type SchedulingBackup.
+func (v *SchedulingBackupCustomValidator) ValidateDelete(ctx context.Context, schedulingbackup *databasev1alpha1.SchedulingBackup) (admission.Warnings, error) {
 	schedulingbackuplog.Info("Validation for SchedulingBackup upon deletion", "name", schedulingbackup.GetName())
 
 	// TODO(user): fill in your validation logic upon object deletion.

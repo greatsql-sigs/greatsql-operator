@@ -84,11 +84,13 @@ type GroupReplicationClusterStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:resource:shortName=mgr
+//nolint:lll
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.status.phase",description="The current phase of the group replication cluster"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.status.ready",description="The number of ready members"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Message",type="string",priority=1,JSONPath=".status.status.message",description="The status message"
 // +kubebuilder:printcolumn:name="Reason",type="string",priority=1,JSONPath=".status.status.reason",description="The status reason"
+
 type GroupReplicationCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -98,6 +100,7 @@ type GroupReplicationCluster struct {
 }
 
 // +kubebuilder:object:root=true
+
 type GroupReplicationClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

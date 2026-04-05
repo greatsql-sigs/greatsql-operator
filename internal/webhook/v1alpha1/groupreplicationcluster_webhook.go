@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	databasev1alpha1 "github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
@@ -35,7 +33,7 @@ var groupreplicationclusterlog = logf.Log.WithName("groupreplicationcluster-reso
 
 // SetupGroupReplicationClusterWebhookWithManager registers the webhook for GroupReplicationCluster in the manager.
 func SetupGroupReplicationClusterWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&databasev1alpha1.GroupReplicationCluster{}).
+	return ctrl.NewWebhookManagedBy(mgr, &databasev1alpha1.GroupReplicationCluster{}).
 		WithValidator(&GroupReplicationClusterCustomValidator{}).
 		WithDefaulter(&GroupReplicationClusterCustomDefaulter{}).
 		Complete()
@@ -46,14 +44,10 @@ func SetupGroupReplicationClusterWebhookWithManager(mgr ctrl.Manager) error {
 // GroupReplicationClusterCustomDefaulter 为 GroupReplicationCluster 设置默认值。
 type GroupReplicationClusterCustomDefaulter struct{}
 
-var _ webhook.CustomDefaulter = &GroupReplicationClusterCustomDefaulter{}
+var _ admission.Defaulter[*databasev1alpha1.GroupReplicationCluster] = &GroupReplicationClusterCustomDefaulter{}
 
 // Default 在 create/update 时为未填字段设置默认值。
-func (d *GroupReplicationClusterCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	c, ok := obj.(*databasev1alpha1.GroupReplicationCluster)
-	if !ok {
-		return fmt.Errorf("expected a GroupReplicationCluster but got %T", obj)
-	}
+func (d *GroupReplicationClusterCustomDefaulter) Default(ctx context.Context, c *databasev1alpha1.GroupReplicationCluster) error {
 	groupreplicationclusterlog.Info("defaulting GroupReplicationCluster", "name", c.GetName())
 
 	spec := &c.Spec
@@ -91,7 +85,7 @@ func (d *GroupReplicationClusterCustomDefaulter) Default(ctx context.Context, ob
 // GroupReplicationClusterCustomValidator 校验 GroupReplicationCluster 的 create/update。
 type GroupReplicationClusterCustomValidator struct{}
 
-var _ webhook.CustomValidator = &GroupReplicationClusterCustomValidator{}
+var _ admission.Validator[*databasev1alpha1.GroupReplicationCluster] = &GroupReplicationClusterCustomValidator{}
 
 // validateGroupReplicationClusterSpec 校验 spec：成员非空、角色合法、单主/多主约束。
 // 注意：spec.Pod/container（name、image 等）不在此处校验，由 controller 在运行时使用默认镜像等逻辑处理。
@@ -148,22 +142,13 @@ func validateGroupReplicationClusterSpec(spec *databasev1alpha1.GroupReplication
 }
 
 // ValidateCreate 在创建时校验 spec。
-func (v *GroupReplicationClusterCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	c, ok := obj.(*databasev1alpha1.GroupReplicationCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected a GroupReplicationCluster but got %T", obj)
-	}
+func (v *GroupReplicationClusterCustomValidator) ValidateCreate(ctx context.Context, c *databasev1alpha1.GroupReplicationCluster) (admission.Warnings, error) {
 	groupreplicationclusterlog.Info("validate create", "name", c.GetName())
 	return nil, validateGroupReplicationClusterSpec(&c.Spec)
 }
 
 // ValidateUpdate 在更新时校验 spec，并禁止修改 spec.mode。
-func (v *GroupReplicationClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldC, okOld := oldObj.(*databasev1alpha1.GroupReplicationCluster)
-	newC, okNew := newObj.(*databasev1alpha1.GroupReplicationCluster)
-	if !okOld || !okNew {
-		return nil, fmt.Errorf("expected GroupReplicationCluster objects, got %T and %T", oldObj, newObj)
-	}
+func (v *GroupReplicationClusterCustomValidator) ValidateUpdate(ctx context.Context, oldC, newC *databasev1alpha1.GroupReplicationCluster) (admission.Warnings, error) {
 	groupreplicationclusterlog.Info("validate update", "name", newC.GetName())
 	if oldC.Spec.Mode != newC.Spec.Mode {
 		return nil, fmt.Errorf("spec.mode is immutable (was %q)", oldC.Spec.Mode)
@@ -172,9 +157,7 @@ func (v *GroupReplicationClusterCustomValidator) ValidateUpdate(ctx context.Cont
 }
 
 // ValidateDelete 删除时不拒绝，仅打日志。
-func (v *GroupReplicationClusterCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	if c, ok := obj.(*databasev1alpha1.GroupReplicationCluster); ok {
-		groupreplicationclusterlog.Info("validate delete", "name", c.GetName())
-	}
+func (v *GroupReplicationClusterCustomValidator) ValidateDelete(ctx context.Context, c *databasev1alpha1.GroupReplicationCluster) (admission.Warnings, error) {
+	groupreplicationclusterlog.Info("validate delete", "name", c.GetName())
 	return nil, nil
 }

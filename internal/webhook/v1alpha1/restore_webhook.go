@@ -18,12 +18,9 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	databasev1alpha1 "github.com/greatsql-sigs/greatsql-operator/api/v1alpha1"
@@ -35,7 +32,7 @@ var restorelog = logf.Log.WithName("restore-resource")
 
 // SetupRestoreWebhookWithManager registers the webhook for Restore in the manager.
 func SetupRestoreWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&databasev1alpha1.Restore{}).
+	return ctrl.NewWebhookManagedBy(mgr, &databasev1alpha1.Restore{}).
 		WithValidator(&RestoreCustomValidator{}).
 		WithDefaulter(&RestoreCustomDefaulter{}).
 		Complete()
@@ -54,15 +51,10 @@ type RestoreCustomDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
 
-var _ webhook.CustomDefaulter = &RestoreCustomDefaulter{}
+var _ admission.Defaulter[*databasev1alpha1.Restore] = &RestoreCustomDefaulter{}
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Restore.
-func (d *RestoreCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	restore, ok := obj.(*databasev1alpha1.Restore)
-
-	if !ok {
-		return fmt.Errorf("expected an Restore object but got %T", obj)
-	}
+// Default implements admission.Defaulter so a webhook will be registered for the Kind Restore.
+func (d *RestoreCustomDefaulter) Default(ctx context.Context, restore *databasev1alpha1.Restore) error {
 	restorelog.Info("Defaulting for Restore", "name", restore.GetName())
 
 	// TODO(user): fill in your defaulting logic.
@@ -84,14 +76,10 @@ type RestoreCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 }
 
-var _ webhook.CustomValidator = &RestoreCustomValidator{}
+var _ admission.Validator[*databasev1alpha1.Restore] = &RestoreCustomValidator{}
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type Restore.
-func (v *RestoreCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	restore, ok := obj.(*databasev1alpha1.Restore)
-	if !ok {
-		return nil, fmt.Errorf("expected a Restore object but got %T", obj)
-	}
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type Restore.
+func (v *RestoreCustomValidator) ValidateCreate(ctx context.Context, restore *databasev1alpha1.Restore) (admission.Warnings, error) {
 	restorelog.Info("Validation for Restore upon creation", "name", restore.GetName())
 
 	// TODO(user): fill in your validation logic upon object creation.
@@ -99,25 +87,17 @@ func (v *RestoreCustomValidator) ValidateCreate(ctx context.Context, obj runtime
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type Restore.
-func (v *RestoreCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	restore, ok := newObj.(*databasev1alpha1.Restore)
-	if !ok {
-		return nil, fmt.Errorf("expected a Restore object for the newObj but got %T", newObj)
-	}
-	restorelog.Info("Validation for Restore upon update", "name", restore.GetName())
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type Restore.
+func (v *RestoreCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *databasev1alpha1.Restore) (admission.Warnings, error) {
+	restorelog.Info("Validation for Restore upon update", "name", newObj.GetName())
 
 	// TODO(user): fill in your validation logic upon object update.
 
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type Restore.
-func (v *RestoreCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	restore, ok := obj.(*databasev1alpha1.Restore)
-	if !ok {
-		return nil, fmt.Errorf("expected a Restore object but got %T", obj)
-	}
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type Restore.
+func (v *RestoreCustomValidator) ValidateDelete(ctx context.Context, restore *databasev1alpha1.Restore) (admission.Warnings, error) {
 	restorelog.Info("Validation for Restore upon deletion", "name", restore.GetName())
 
 	// TODO(user): fill in your validation logic upon object deletion.
